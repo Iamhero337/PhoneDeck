@@ -14,6 +14,7 @@ import socket
 import subprocess
 import shutil
 import time
+import uuid
 import updater
 
 try:
@@ -366,9 +367,10 @@ async def main():
 
     # Register mDNS service
     hostname = socket.gethostname()
+    unique_id = uuid.uuid4().hex[:6]
     info = AsyncServiceInfo(
         "_phonedeck._tcp.local.",
-        f"PhoneDeck Desktop ({hostname})._phonedeck._tcp.local.",
+        f"PhoneDeck Desktop ({hostname}-{unique_id})._phonedeck._tcp.local.",
         addresses=[socket.inet_aton(local_ip)],
         port=port,
         properties={},
