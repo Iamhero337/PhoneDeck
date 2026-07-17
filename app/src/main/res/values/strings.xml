@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhoneDeck</string>
+    <string name="connecting">Connecting…</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="no_server_found">No desktop found on network</string>
+    <string name="tap_any_tile">Tap any tile to launch on desktop</string>
+</resources>
