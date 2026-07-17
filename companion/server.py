@@ -330,6 +330,32 @@ async def handler(websocket):
     log.info(f"Client disconnected: {addr}")
 
 
+def get_best_local_ip():
+    try:
+        import ifaddr
+        best_ip = None
+        for adapter in ifaddr.get_adapters():
+            name = adapter.name.lower()
+            # Filter out loopback, docker, bridge, and known VPN/tunnel interfaces
+            if name == 'lo' or name.startswith('docker') or name.startswith('br-') or name.startswith('veth') or 'warp' in name or name.startswith('tun') or name.startswith('wg'):
+                continue
+            for ip in adapter.ips:
+                if isinstance(ip.ip, str) and not ip.ip.startswith("127.") and not ip.ip.startswith("169.254."):
+                    return ip.ip  # Return the first physical/WiFi IP found
+    except ImportError:
+        pass
+        
+    # Fallback if ifaddr fails
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception:
+        return "127.0.0.1"
+
+
 async def main():
     # Check for updates in the background
     asyncio.create_task(asyncio.to_thread(updater.check_for_updates))
@@ -337,14 +363,7 @@ async def main():
     host = "0.0.0.0"
     port = 9090
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-    except Exception:
-        local_ip = "127.0.0.1"
-    finally:
-        s.close()
+    local_ip = get_best_local_ip()
 
     print("\033[36m")
     print("   ____  __                     ____            __  ")
