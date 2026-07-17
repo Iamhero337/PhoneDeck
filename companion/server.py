@@ -55,6 +55,24 @@ def execute_command(command: str) -> dict:
         import webbrowser
         webbrowser.open(url)
         return {"status": "ok", "command": command}
+
+    if command == "browser":
+        import webbrowser
+        webbrowser.open("https://google.com")
+        return {"status": "ok", "command": command}
+        
+    if command == "spotify":
+        # Check if spotify is natively installed
+        if SYSTEM == "Darwin" and os.path.exists("/Applications/Spotify.app"):
+            subprocess.run(["open", "-a", "Spotify"])
+        elif SYSTEM == "Linux" and _check_tool("spotify"):
+            subprocess.Popen(["spotify"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif SYSTEM == "Windows" and _check_tool("spotify"):
+            subprocess.Popen(["start", "spotify"], shell=True)
+        else:
+            import webbrowser
+            webbrowser.open("https://open.spotify.com")
+        return {"status": "ok", "command": command}
         
     try:
         if SYSTEM == "Darwin":
@@ -76,8 +94,6 @@ def _macos_command(command: str) -> dict:
         cmds = {
             "code": 'tell application "Visual Studio Code" to activate',
             "terminal": 'tell application "Terminal" to activate',
-            "browser": 'tell application "Safari" to activate',
-            "spotify": 'tell application "Spotify" to activate',
             "figma": 'tell application "Figma" to activate',
             "photoshop": 'tell application "Adobe Photoshop" to activate',
             "illustrator": 'tell application "Adobe Illustrator" to activate',
@@ -108,8 +124,6 @@ def _linux_command(command: str) -> dict:
     app_map = {
         "code": "code",
         "terminal": _find_terminal(),
-        "browser": "xdg-open",
-        "spotify": "spotify",
         "figma": "figma-linux",
         "photoshop": None,
         "illustrator": None,
@@ -222,62 +236,57 @@ def _linux_media_playback(command: str) -> dict:
 
 
 def _linux_brightness(command: str) -> dict:
+    if _check_tool("brightnessctl"):
+        arg = "5%+" if "up" in command else "5%-"
+        subprocess.run(["brightnessctl", "s", arg])
+        return {"status": "ok", "command": command}
+        
+    if _check_tool("xbacklight"):
+        arg = "+5" if "up" in command else "-5"
+        subprocess.run(["xbacklight", arg])
+        return {"status": "ok", "command": command}
+
     backlight_dirs = glob.glob("/sys/class/backlight/*")
     if not backlight_dirs:
-        return {"status": "error", "message": "No backlight interface found"}
+        return {"status": "error", "message": "No backlight interface found. Install brightnessctl."}
     backlight = backlight_dirs[0]
     try:
         with open(os.path.join(backlight, "max_brightness")) as f:
             max_val = int(f.read().strip())
         with open(os.path.join(backlight, "brightness")) as f:
             current = int(f.read().strip())
-    except (IOError, ValueError):
-        return {"status": "error", "message": "Cannot read backlight values"}
-
-    step = max(1, max_val // 20)
-    new_val = current + step if "up" in command else current - step
-    new_val = max(0, min(max_val, new_val))
-
-    # Try direct write first, fall back to pkexec
-    try:
+        step = max(1, max_val // 20)
+        new_val = current + step if "up" in command else current - step
+        new_val = max(0, min(max_val, new_val))
         with open(os.path.join(backlight, "brightness"), "w") as f:
             f.write(str(new_val))
         return {"status": "ok", "command": command}
-    except IOError:
-        pass
-
-    try:
-        subprocess.run(
-            ["pkexec", "tee", os.path.join(backlight, "brightness")],
-            input=f"{new_val}\n", capture_output=True, text=True, timeout=5
-        )
-        return {"status": "ok", "command": command}
     except Exception:
-        return {"status": "error", "message": "Brightness needs root: add udev rule or use pkexec"}
+        return {"status": "error", "message": "Brightness needs root: add udev rule or install brightnessctl"}
 
 
 def _linux_screenshot() -> dict:
-    if _check_tool("grim"):
-        path = os.path.expanduser("~/Pictures/Screenshots")
-        os.makedirs(path, exist_ok=True)
-        path = os.path.expanduser("~/Pictures/Screenshots")
-        os.makedirs(path, exist_ok=True)
-        filename = f"screenshot-{int(time.time())}.png"
-        subprocess.Popen(["grim", os.path.join(path, filename)])
-        return {"status": "ok"}
+    path = os.path.expanduser("~/Pictures/Screenshots")
+    os.makedirs(path, exist_ok=True)
+    filename = os.path.join(path, f"screenshot-{int(time.time())}.png")
 
+    if _check_tool("spectacle"):
+        subprocess.Popen(["spectacle", "-b", "-n", "-o", filename])
+        return {"status": "ok"}
     if _check_tool("gnome-screenshot"):
-        subprocess.Popen(["gnome-screenshot"])
+        subprocess.Popen(["gnome-screenshot", "-f", filename])
         return {"status": "ok"}
-
+    if _check_tool("grim"):
+        subprocess.Popen(["grim", filename])
+        return {"status": "ok"}
+    if _check_tool("scrot"):
+        subprocess.Popen(["scrot", filename])
+        return {"status": "ok"}
     if _check_tool("import"):
-        path = os.path.expanduser("~/Pictures/Screenshots")
-        os.makedirs(path, exist_ok=True)
-        filename = f"screenshot-{int(time.time())}.png"
-        subprocess.Popen(["import", os.path.join(path, filename)])
+        subprocess.Popen(["import", "-window", "root", filename])
         return {"status": "ok"}
 
-    return {"status": "error", "message": "No screenshot tool (install grim or gnome-screenshot)"}
+    return {"status": "error", "message": "No screenshot tool (install spectacle, grim, scrot, or gnome-screenshot)"}
 
 
 # ─── Windows ────────────────────────────────────────────────────────
@@ -286,7 +295,6 @@ def _windows_command(command: str) -> dict:
     app_map = {
         "code": "code",
         "terminal": "cmd",
-        "browser": "start",
         "screenshot": "snippingtool",
         "lock": "rundll32.exe user32.dll,LockWorkStation",
     }
@@ -303,10 +311,7 @@ def _windows_command(command: str) -> dict:
         return {"status": "ok", "command": command}
 
     app = app_map.get(command, command)
-    if command == "browser":
-        subprocess.Popen(["start", ""], shell=True)
-    else:
-        subprocess.Popen(["start", app], shell=True)
+    subprocess.Popen(["start", app], shell=True)
     return {"status": "ok", "command": command}
 
 
