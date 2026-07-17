@@ -76,15 +76,8 @@ Then update the `app_map` inside `companion/server.py` to route `"my-app-command
 ## 🏗️ Architecture
 Curious about how it works under the hood? Read our [Architecture Document](ARCHITECTURE.md).
 
-## 👨‍💻 Credits & Contact
-
-Built with ❤️ by **@iamhero337**.
-
-Follow me and say hi! I'd love to see how you use PhoneDeck.
-- **X (Twitter):** [@iamhero337](https://twitter.com/iamhero337)
-- **LinkedIn:** [iamhero337](https://linkedin.com/in/iamhero337)
-- **Instagram:** [@iamhero337](https://instagram.com/iamhero337)
-- **GitHub:** [@iamhero337](https://github.com/iamhero337)
+## 👨‍💻 Credits
+Built with ❤️ by [@iamhero337](https://github.com/iamhero337).
 
 ## 📄 License
 MIT License. Free to use, modify, and distribute.

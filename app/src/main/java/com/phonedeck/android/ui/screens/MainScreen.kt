@@ -120,6 +120,16 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 }
             }
+
+            Text(
+                text = "Built with ❤️ by @iamhero337",
+                color = Color(0xFF555566),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
         }
     }
 
