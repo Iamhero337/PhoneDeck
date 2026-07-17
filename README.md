@@ -33,14 +33,17 @@ Download the latest `PhoneDeck.apk` from the [Releases](https://github.com/iamhe
 2. Press `Win + R`, type `shell:startup`, and hit Enter.
 3. Place the `.exe` (or a shortcut to it) in the Startup folder. It will now run silently in the background every time you boot!
 
-**For Linux (systemd Background Service):**
-1. Clone this repository or download the source.
-2. Run the automated install script:
-   ```bash
-   chmod +x install_linux.sh
-   ./install_linux.sh
-   ```
-This installs the companion server as a systemd user service. It starts on boot, restarts on failure, and stays out of your way!
+**For Linux:**
+You have two options on Linux:
+1. **Standalone Binary:** Download `phonedeck-server-linux` from the [Releases](https://github.com/iamhero337/PhoneDeck/releases) tab. Make it executable (`chmod +x phonedeck-server-linux`) and run it. You can add this to your desktop environment's autostart list.
+2. **systemd Background Service (Recommended):**
+   - Clone this repository or download the source.
+   - Run the automated install script:
+     ```bash
+     chmod +x install_linux.sh
+     ./install_linux.sh
+     ```
+   This installs the companion server as a systemd user service. It starts on boot, restarts on failure, and stays out of your way!
 
 **For macOS (Background execution):**
 1. Ensure Python 3 is installed.
