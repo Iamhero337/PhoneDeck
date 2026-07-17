@@ -1,55 +1,42 @@
 # PhoneDeck Architecture
 
-PhoneDeck is built with a distributed architecture focusing on low latency, seamless discovery, and a strict separation of concerns.
+PhoneDeck is built on a client-server architecture designed to be lightweight, incredibly fast, and platform-agnostic. The system consists of two primary components: an Android App (the client) and a Python Background Service (the server).
 
-## High-Level Overview
+## 1. High-Level Overview
 
 ```mermaid
-graph LR
-    subgraph Android Device
-        A[PhoneDeck App]
-        B[Service Discovery (mDNS)]
-        C[WebSocket Client]
-    end
-
-    subgraph Desktop / Laptop
-        D[Companion Server]
-        E[mDNS Broadcaster]
-        F[OS Specific Handlers]
-    end
-
-    B -.->|Resolves Server IP| E
-    C <==>|Bi-directional Commands| D
-    D -->|Executes| F
+graph TD
+    A[Android App (Jetpack Compose)] <-->|WebSockets (JSON payload)| B[Python Server]
+    B -->|macOS Handlers| C[macOS (AppleScript / open)]
+    B -->|Linux Handlers| D[Linux (subprocess / xdg)]
+    B -->|Windows Handlers| E[Windows (cmd / start)]
 ```
 
-## 1. The Mobile Client (Android / Kotlin)
+## 2. Components
 
-The mobile client acts strictly as the **presentation and networking layer**.
+### The Android Client
+The Android client is built natively using **Kotlin** and **Jetpack Compose** for a modern, responsive UI. 
+- **Auto-Discovery:** It uses `NsdManager` (Network Service Discovery) to automatically discover the desktop server on the local Wi-Fi network without requiring manual IP entry.
+- **Dynamic Configuration:** Pages and tiles are configured via a centralized `ConfigRepository`. The layout is dynamically built into a grid, grouped into swipeable pager tabs.
+- **Real-Time Communication:** Commands are sent over a persistent WebSocket connection ensuring near zero-latency execution.
 
-- **UI Framework:** Built using Jetpack Compose for a highly responsive, modern UI.
-- **Service Discovery:** Uses Android's `NsdManager` (Network Service Discovery). The app listens for the `_phonedeck._tcp` service over the local network, drastically reducing user friction by eliminating the need to manually type IP addresses.
-- **Networking:** Built on top of OkHttp's WebSocket implementation. The connection is maintained asynchronously using Kotlin Coroutines and Flows.
-- **State Management:** Uses MVVM pattern. The ViewModel bridges the gap between the UI states (Connection state, current active page) and the Networking layer.
+### The Desktop Server
+The desktop server is a lightweight **Python** background script (`server.py`). It relies on:
+- `websockets` for managing the persistent connection from the Android app.
+- `zeroconf` to broadcast its presence over mDNS, allowing the Android app to discover it automatically.
+- `subprocess` to securely execute OS-level commands and scripts.
 
-## 2. The Companion Server (Python 3)
+## 3. Command Execution Flow
 
-The companion server is a lightweight Python script that acts as the **execution layer**.
+When you tap a tile in the Android app, a specific command string (e.g., `"browser"`, `"volume_up"`, or `"open_url:youtube.com"`) is transmitted to the server.
 
-- **Zero-Config Discovery:** Implements `zeroconf` to broadcast the `_phonedeck._tcp` mDNS service on the local network. 
-- **WebSocket Server:** Uses the `websockets` package to handle asynchronous, non-blocking incoming connections.
-- **OS Abstraction Layer:** The execution pipeline is divided by OS (`SYSTEM = platform.system()`).
-  - **Linux:** Interacts heavily with DBUS, Wayland/X11 tools (`playerctl`, `ydotool`, `pactl`) to manage media and system states.
-  - **Windows:** Relies on the Windows API (`pywin32`) for precise media key emulation and `subprocess` for application launching.
-  - **macOS:** Primarily relies on AppleScript (`osascript`) for native application control and system automation.
+1. **Incoming Request:** The server receives the command via the active WebSocket connection.
+2. **Global Fallbacks:** Commands like opening URLs or cross-platform web browsers are handled natively by Python's `webbrowser` library to ensure default browser preference across all platforms.
+3. **OS-Specific Routing:** If the command is OS-specific (like adjusting volume or launching an IDE), it routes to a dedicated handler:
+   - `_macos_command()`: Uses AppleScript (`osascript`) to gracefully control applications and media on Macs.
+   - `_linux_command()`: Utilizes binary checks (e.g., `which`, `brightnessctl`, `gnome-screenshot`) and generic Linux utilities (`subprocess`) for wide desktop environment compatibility.
+   - `_windows_command()`: Interfaces with `start`, `rundll32`, and other native `cmd` utilities.
+4. **Execution & Response:** The command is executed, and a JSON status dictionary (`{"status": "ok", "command": "..."}`) is returned to the client to confirm successful execution.
 
-## 3. Automation and Deployment
-
-- **Windows/macOS:** A GitHub Actions workflow automatically compiles the `server.py` script into standalone native executables using `PyInstaller`. This eliminates the need for end-users to install Python or understand dependencies.
-- **Linux:** Utilizes a standard `systemd` user service setup script, embracing standard Linux daemon paradigms to ensure the server gracefully restarts and persists across reboots.
-
-## Security Considerations
-
-PhoneDeck is designed to be run **strictly on trusted Local Area Networks (LAN)**. 
-- The WebSocket server binds to `0.0.0.0` but does not implement TLS or authentication, as it's designed to be firewalled behind the user's local router.
-- No sensitive data is transmitted; only abstract command strings (e.g., `play_pause`, `open_browser`).
+## 4. Automatic IP Selection
+To circumvent issues with virtual interfaces (like VPNs, Cloudflare WARP, or Docker bridge networks), the Python server uses the `ifaddr` package to filter out virtual adapters, ensuring the IP broadcasted via mDNS is the actual LAN IP reachable by the phone.

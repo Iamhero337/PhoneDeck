@@ -78,8 +78,9 @@ Tile("my1", "My App", "star", "my-app-command")
 ```
 Then update the `app_map` inside `companion/server.py` to route `"my-app-command"` to the desired system action!
 
-## 🏗️ Architecture
+## 🏗️ Architecture & Progress
 Curious about how it works under the hood? Read our [Architecture Document](ARCHITECTURE.md).
+Want to see what we've recently fixed and added? Check out our [Progress & Changelog](PROGRESS.md).
 
 ## 👨‍💻 Credits
 Built with ❤️ by [@iamhero337](https://github.com/iamhero337).
