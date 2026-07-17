@@ -26,9 +26,17 @@ fun MainScreen(viewModel: MainViewModel) {
     val currentPageIndex by viewModel.currentPageIndex.collectAsState()
     val connectionStatus by viewModel.connectionStatus.collectAsState()
     val connected by viewModel.connected.collectAsState()
+    val discoveredServerIp by viewModel.discoveredServerIp.collectAsState()
 
     var showConnectDialog by remember { mutableStateOf(false) }
     var serverIp by remember { mutableStateOf("") }
+    
+    // Auto-fill IP when discovered
+    LaunchedEffect(discoveredServerIp) {
+        if (discoveredServerIp.isNotBlank() && serverIp.isBlank()) {
+            serverIp = discoveredServerIp
+        }
+    }
     
     var showAddSiteDialog by remember { mutableStateOf(false) }
     var newSiteName by remember { mutableStateOf("") }
@@ -185,11 +193,25 @@ fun MainScreen(viewModel: MainViewModel) {
                             )
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Run the companion server on your desktop first.",
-                            color = Color(0xFF8888AA),
-                            fontSize = 12.sp
-                        )
+                        if (discoveredServerIp.isNotBlank() && serverIp == discoveredServerIp) {
+                            Text(
+                                "✅ Laptop auto-detected! Click connect.",
+                                color = Color(0xFF4CAF50),
+                                fontSize = 13.sp
+                            )
+                        } else if (discoveredServerIp.isNotBlank()) {
+                            Text(
+                                "Found server at: $discoveredServerIp",
+                                color = Color(0xFF4A90D9),
+                                fontSize = 13.sp
+                            )
+                        } else {
+                            Text(
+                                "Searching for laptop on WiFi...",
+                                color = Color(0xFF8888AA),
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             },

@@ -31,6 +31,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
+    private val _discoveredServerIp = MutableStateFlow("")
+    val discoveredServerIp: StateFlow<String> = _discoveredServerIp.asStateFlow()
+
     init {
         ConfigRepository.init(application)
         _pages.value = ConfigRepository.getPages()
@@ -43,9 +46,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             mdnsScanner.discoverServices().collect { serviceInfo ->
                 if (!_connected.value) {
                     val host = serviceInfo.host.hostAddress
-                    val port = serviceInfo.port
                     if (host != null) {
-                        connect(host, port)
+                        _discoveredServerIp.value = host
                     }
                 }
             }

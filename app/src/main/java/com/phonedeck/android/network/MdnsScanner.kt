@@ -8,9 +8,12 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
+import android.net.wifi.WifiManager
+
 class MdnsScanner(context: Context) {
     private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
-    private val SERVICE_TYPE = "_phonedeck._tcp."
+    private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private val SERVICE_TYPE = "_phonedeck._tcp"
 
     fun discoverServices(): Flow<NsdServiceInfo> = callbackFlow {
         val discoveryListener = object : NsdManager.DiscoveryListener {
@@ -20,7 +23,7 @@ class MdnsScanner(context: Context) {
 
             override fun onServiceFound(service: NsdServiceInfo) {
                 Log.d("MdnsScanner", "Service discovery success: $service")
-                if (service.serviceType == SERVICE_TYPE) {
+                if (service.serviceType.contains("_phonedeck._tcp")) {
                     nsdManager.resolveService(service, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                             Log.e("MdnsScanner", "Resolve failed: $errorCode")
@@ -53,6 +56,10 @@ class MdnsScanner(context: Context) {
             }
         }
 
+        val multicastLock = wifiManager.createMulticastLock("PhoneDeckMdnsLock")
+        multicastLock.setReferenceCounted(true)
+        multicastLock.acquire()
+
         try {
             nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
         } catch (e: Exception) {
@@ -63,6 +70,9 @@ class MdnsScanner(context: Context) {
             try {
                 nsdManager.stopServiceDiscovery(discoveryListener)
             } catch (e: Exception) {}
+            if (multicastLock.isHeld) {
+                multicastLock.release()
+            }
         }
     }
 }
