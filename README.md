@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://via.placeholder.com/150x150.png?text=PhoneDeck" alt="PhoneDeck Logo" width="120" height="120" />
+  <img src="assets/logo.jpg" alt="PhoneDeck Logo" width="150" height="150" style="border-radius: 24px;" />
   <h1>PhoneDeck</h1>
   <p><strong>Turn your Android phone into a wireless productivity controller for your computer.</strong></p>
   <p>Like a Stream Deck, but completely free and open-source.</p>
