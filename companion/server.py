@@ -14,6 +14,7 @@ import socket
 import subprocess
 import shutil
 import time
+import updater
 
 try:
     import websockets
@@ -320,6 +321,9 @@ async def handler(websocket):
 
 
 async def main():
+    # Check for updates in the background
+    asyncio.create_task(asyncio.to_thread(updater.check_for_updates))
+
     host = "0.0.0.0"
     port = 9090
 
