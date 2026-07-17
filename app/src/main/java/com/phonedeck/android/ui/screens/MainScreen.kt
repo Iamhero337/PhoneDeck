@@ -29,6 +29,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
     var showConnectDialog by remember { mutableStateOf(false) }
     var serverIp by remember { mutableStateOf("") }
+    
+    var showAddSiteDialog by remember { mutableStateOf(false) }
+    var newSiteName by remember { mutableStateOf("") }
+    var newSiteUrl by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -44,6 +48,15 @@ fun MainScreen(viewModel: MainViewModel) {
                 )
             },
             actions = {
+                if (currentPageIndex < pages.size && pages[currentPageIndex].id == "top_sites") {
+                    IconButton(onClick = { showAddSiteDialog = true }) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add Site",
+                            tint = Color(0xFF4A90D9)
+                        )
+                    }
+                }
                 if (!connected) {
                     IconButton(onClick = { showConnectDialog = true }) {
                         Icon(
@@ -201,6 +214,75 @@ fun MainScreen(viewModel: MainViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showConnectDialog = false }) {
+                    Text("Cancel", color = Color(0xFF8888AA))
+                }
+            },
+            containerColor = Color(0xFF1A1A2E),
+            titleContentColor = Color.White,
+            textContentColor = Color.White
+        )
+    }
+
+    if (showAddSiteDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddSiteDialog = false },
+            title = { Text("Add Top Site", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newSiteName,
+                        onValueChange = { newSiteName = it },
+                        label = { Text("Site Name") },
+                        placeholder = { Text("e.g. YouTube") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF4A90D9),
+                            unfocusedBorderColor = Color(0xFF3A3A4E),
+                            focusedLabelColor = Color(0xFF4A90D9),
+                            unfocusedLabelColor = Color(0xFF8888AA),
+                            cursorColor = Color(0xFF4A90D9),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newSiteUrl,
+                        onValueChange = { newSiteUrl = it },
+                        label = { Text("URL") },
+                        placeholder = { Text("e.g. youtube.com") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF4A90D9),
+                            unfocusedBorderColor = Color(0xFF3A3A4E),
+                            focusedLabelColor = Color(0xFF4A90D9),
+                            unfocusedLabelColor = Color(0xFF8888AA),
+                            cursorColor = Color(0xFF4A90D9),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newSiteName.isNotBlank() && newSiteUrl.isNotBlank()) {
+                            viewModel.addTopSite(newSiteName.trim(), newSiteUrl.trim())
+                            newSiteName = ""
+                            newSiteUrl = ""
+                            showAddSiteDialog = false
+                        }
+                    },
+                    enabled = newSiteName.isNotBlank() && newSiteUrl.isNotBlank()
+                ) {
+                    Text("Add", color = Color(0xFF4A90D9))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddSiteDialog = false }) {
                     Text("Cancel", color = Color(0xFF8888AA))
                 }
             },

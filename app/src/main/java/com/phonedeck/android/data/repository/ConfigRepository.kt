@@ -1,9 +1,16 @@
 package com.phonedeck.android.data.repository
 
+import android.content.Context
+import android.content.SharedPreferences
 import com.phonedeck.android.data.models.Page
 import com.phonedeck.android.data.models.Tile
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 object ConfigRepository {
+    private var prefs: SharedPreferences? = null
+    private val topSitesTiles = mutableListOf<Tile>()
 
     private val defaultPages = listOf(
         Page(
@@ -52,5 +59,56 @@ object ConfigRepository {
         ),
     )
 
-    fun getPages(): List<Page> = defaultPages
+    fun init(context: Context) {
+        prefs = context.getSharedPreferences("phonedeck_prefs", Context.MODE_PRIVATE)
+        loadTopSites()
+    }
+
+    private fun loadTopSites() {
+        topSitesTiles.clear()
+        val json = prefs?.getString("top_sites", "[]") ?: "[]"
+        try {
+            val array = JSONArray(json)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                topSitesTiles.add(Tile(
+                    id = obj.getString("id"),
+                    label = obj.getString("label"),
+                    icon = obj.getString("icon"),
+                    command = obj.getString("command")
+                ))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveTopSites() {
+        val array = JSONArray()
+        topSitesTiles.forEach {
+            val obj = JSONObject()
+            obj.put("id", it.id)
+            obj.put("label", it.label)
+            obj.put("icon", it.icon)
+            obj.put("command", it.command)
+            array.put(obj)
+        }
+        prefs?.edit()?.putString("top_sites", array.toString())?.apply()
+    }
+
+    fun addTopSite(label: String, url: String) {
+        topSitesTiles.add(Tile(
+            id = UUID.randomUUID().toString(),
+            label = label,
+            icon = "public", // We'll just use a generic globe icon for all websites for reliability
+            command = "open_url:$url"
+        ))
+        saveTopSites()
+    }
+
+    fun getPages(): List<Page> {
+        val pages = defaultPages.toMutableList()
+        pages.add(Page("top_sites", "Top Sites", topSitesTiles.toList()))
+        return pages
+    }
 }

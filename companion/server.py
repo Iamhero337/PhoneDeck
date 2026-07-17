@@ -46,6 +46,13 @@ def _check_tool(name: str) -> bool:
 
 def execute_command(command: str) -> dict:
     log.info(f"Executing: {command}")
+    
+    if command.startswith("open_url:"):
+        url = command.split("open_url:", 1)[1].strip()
+        import webbrowser
+        webbrowser.open(url)
+        return {"status": "ok", "command": command}
+        
     try:
         if SYSTEM == "Darwin":
             return _macos_command(command)

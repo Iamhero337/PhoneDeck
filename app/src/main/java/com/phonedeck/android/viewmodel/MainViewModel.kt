@@ -28,6 +28,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
     init {
+        ConfigRepository.init(application)
         _pages.value = ConfigRepository.getPages()
     }
 
@@ -60,6 +61,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendCommand(command: String) {
         client.sendCommand(command)
+    }
+
+    fun addTopSite(label: String, url: String) {
+        var cleanUrl = url.trim()
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            cleanUrl = "https://$cleanUrl"
+        }
+        ConfigRepository.addTopSite(label, cleanUrl)
+        _pages.value = ConfigRepository.getPages()
     }
 
     override fun onCleared() {
