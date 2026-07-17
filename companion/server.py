@@ -27,12 +27,14 @@ except ImportError:
 
 try:
     from zeroconf import ServiceInfo, Zeroconf
+    from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 except ImportError:
     try:
         subprocess.check_call(["pip3", "install", "zeroconf"])
     except subprocess.CalledProcessError:
         subprocess.check_call(["pip3", "install", "zeroconf", "--break-system-packages"])
     from zeroconf import ServiceInfo, Zeroconf
+    from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 
 logging.basicConfig(level=logging.INFO, format="[PhoneDeck] %(message)s")
 log = logging.getLogger("phonedeck")
@@ -364,7 +366,7 @@ async def main():
 
     # Register mDNS service
     hostname = socket.gethostname()
-    info = ServiceInfo(
+    info = AsyncServiceInfo(
         "_phonedeck._tcp.local.",
         f"PhoneDeck Desktop ({hostname})._phonedeck._tcp.local.",
         addresses=[socket.inet_aton(local_ip)],
@@ -373,19 +375,74 @@ async def main():
         server=f"{hostname}.local."
     )
     
-    zc = Zeroconf()
-    zc.register_service(info)
+    zc = AsyncZeroconf()
+    await zc.async_register_service(info)
 
     try:
         async with websockets.serve(handler, host, port):
             log.info(f"Listening on {host}:{port}")
             await asyncio.Future()
     finally:
-        zc.unregister_service(info)
-        zc.close()
+        await zc.async_unregister_service(info)
+        await zc.async_close()
 
+
+def auto_install_linux_service():
+    if SYSTEM != "Linux":
+        return
+        
+    import sys
+    current_exe = os.path.abspath(sys.argv[0])
+    
+    # Don't auto install if running from the systemd install location
+    target_bin = os.path.expanduser("~/.local/bin/phonedeck-server")
+    if current_exe == target_bin:
+        return
+        
+    # Check if this is running as a compiled PyInstaller executable
+    if not getattr(sys, 'frozen', False):
+        return
+
+    print("╔══════════════════════════════════════╗")
+    print("║   PhoneDeck Auto-Install (Linux)     ║")
+    print("╚══════════════════════════════════════╝")
+    print("Installing background service...")
+    
+    os.makedirs(os.path.expanduser("~/.local/bin"), exist_ok=True)
+    shutil.copy2(current_exe, target_bin)
+    os.chmod(target_bin, 0o755)
+    
+    service_content = f"""[Unit]
+Description=PhoneDeck Companion Server
+After=network.target
+
+[Service]
+ExecStart={target_bin}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"""
+    systemd_dir = os.path.expanduser("~/.config/systemd/user")
+    os.makedirs(systemd_dir, exist_ok=True)
+    
+    service_path = os.path.join(systemd_dir, "phonedeck.service")
+    with open(service_path, "w") as f:
+        f.write(service_content)
+        
+    try:
+        subprocess.check_call(["systemctl", "--user", "daemon-reload"])
+        subprocess.check_call(["systemctl", "--user", "enable", "--now", "phonedeck.service"])
+        print("\n✅ Successfully installed and started in the background!")
+        print("You can safely close this terminal. It will always start automatically.")
+        print("Just open your PhoneDeck Android app and enjoy.")
+        sys.exit(0)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to start systemd service: {e}")
 
 if __name__ == "__main__":
+    auto_install_linux_service()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
