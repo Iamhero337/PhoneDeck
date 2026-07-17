@@ -6,7 +6,7 @@ import subprocess
 import platform
 import time
 
-CURRENT_VERSION = "v1.0.0"
+CURRENT_VERSION = "v1.1.0"
 REPO = "Iamhero337/PhoneDeck"
 
 def check_for_updates():
