@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
 
-const val CURRENT_VERSION = "v1.1.4"
+const val CURRENT_VERSION = "v1.2.0"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

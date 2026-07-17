@@ -180,6 +180,10 @@ private fun getIconForTile(icon: String): ImageVector {
         "prev" -> Icons.Default.SkipPrevious
         "brightness_up" -> Icons.Default.BrightnessHigh
         "brightness_down" -> Icons.Default.BrightnessLow
+        "restart" -> Icons.Default.RestartAlt
+        "shutdown" -> Icons.Default.PowerSettingsNew
+        "logout" -> Icons.Default.ExitToApp
+        "hibernate" -> Icons.Default.Bedtime
         else -> Icons.Default.Apps
     }
 }

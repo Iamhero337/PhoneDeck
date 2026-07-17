@@ -15,6 +15,7 @@ class PhoneDeckClient {
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.SECONDS)
         .connectTimeout(5, TimeUnit.SECONDS)
+        .pingInterval(15, TimeUnit.SECONDS)
         .build()
 
     private var webSocket: WebSocket? = null
@@ -27,7 +28,7 @@ class PhoneDeckClient {
 
     fun connect(host: String, port: Int): Flow<ConnectionState> = callbackFlow {
         val request = Request.Builder()
-            .url("ws://$host:$port/ws")
+            .url("ws://$host:$port")
             .build()
 
         val listener = object : WebSocketListener() {

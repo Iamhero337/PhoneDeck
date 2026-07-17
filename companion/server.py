@@ -10,20 +10,23 @@ import json
 import logging
 import os
 import platform
+import signal
 import socket
 import subprocess
 import shutil
+import sys
 import time
 import uuid
+
 import updater
 
 try:
     import websockets
 except ImportError:
     try:
-        subprocess.check_call(["pip3", "install", "websockets"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "websockets"])
     except subprocess.CalledProcessError:
-        subprocess.check_call(["pip3", "install", "websockets", "--break-system-packages"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "websockets", "--break-system-packages"])
     import websockets
 
 try:
@@ -31,38 +34,91 @@ try:
     from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 except ImportError:
     try:
-        subprocess.check_call(["pip3", "install", "zeroconf"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "zeroconf"])
     except subprocess.CalledProcessError:
-        subprocess.check_call(["pip3", "install", "zeroconf", "--break-system-packages"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "zeroconf", "--break-system-packages"])
     from zeroconf import ServiceInfo, Zeroconf
     from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
+
+try:
+    import ifaddr
+except ImportError:
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "ifaddr"])
+    except subprocess.CalledProcessError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "ifaddr", "--break-system-packages"])
+    import ifaddr
 
 logging.basicConfig(level=logging.INFO, format="[PhoneDeck] %(message)s")
 log = logging.getLogger("phonedeck")
 
 SYSTEM = platform.system()
+CONNECTED_CLIENTS = set()
 
 
 def _check_tool(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+async def broadcast(message: str):
+    if CONNECTED_CLIENTS:
+        await asyncio.gather(
+            *(client.send(message) for client in CONNECTED_CLIENTS.copy()),
+            return_exceptions=True
+        )
+
+
 def execute_command(command: str) -> dict:
     log.info(f"Executing: {command}")
-    
+
     if command.startswith("open_url:"):
         url = command.split("open_url:", 1)[1].strip()
         import webbrowser
         webbrowser.open(url)
         return {"status": "ok", "command": command}
 
+    if command in ("restart", "reboot"):
+        if SYSTEM == "Linux":
+            subprocess.Popen(["systemctl", "reboot"])
+        elif SYSTEM == "Darwin":
+            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to restart'])
+        elif SYSTEM == "Windows":
+            subprocess.Popen(["shutdown", "/r", "/t", "0"])
+        return {"status": "ok", "command": command}
+
+    if command == "shutdown":
+        if SYSTEM == "Linux":
+            subprocess.Popen(["systemctl", "poweroff"])
+        elif SYSTEM == "Darwin":
+            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to shut down'])
+        elif SYSTEM == "Windows":
+            subprocess.Popen(["shutdown", "/s", "/t", "0"])
+        return {"status": "ok", "command": command}
+
+    if command == "logout":
+        if SYSTEM == "Linux":
+            subprocess.Popen(["loginctl", "terminate-user", os.environ.get("USER", "")])
+        elif SYSTEM == "Darwin":
+            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to log out'])
+        elif SYSTEM == "Windows":
+            subprocess.Popen(["shutdown", "/l"])
+        return {"status": "ok", "command": command}
+
+    if command == "hibernate":
+        if SYSTEM == "Linux":
+            subprocess.Popen(["systemctl", "hibernate"])
+        elif SYSTEM == "Darwin":
+            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to sleep'])
+        elif SYSTEM == "Windows":
+            subprocess.Popen(["shutdown", "/h"])
+        return {"status": "ok", "command": command}
+
     if command == "browser":
         import webbrowser
         webbrowser.open("https://google.com")
         return {"status": "ok", "command": command}
-        
+
     if command == "spotify":
-        # Check if spotify is natively installed
         if SYSTEM == "Darwin" and os.path.exists("/Applications/Spotify.app"):
             subprocess.run(["open", "-a", "Spotify"])
         elif SYSTEM == "Linux" and _check_tool("spotify"):
@@ -73,7 +129,15 @@ def execute_command(command: str) -> dict:
             import webbrowser
             webbrowser.open("https://open.spotify.com")
         return {"status": "ok", "command": command}
-        
+
+    if command == "get_system_info":
+        info = {
+            "hostname": socket.gethostname(),
+            "platform": SYSTEM,
+            "uptime": _get_uptime(),
+        }
+        return {"status": "ok", "command": command, "data": info}
+
     try:
         if SYSTEM == "Darwin":
             return _macos_command(command)
@@ -86,7 +150,18 @@ def execute_command(command: str) -> dict:
         return {"status": "error", "message": str(e)}
 
 
-# ─── macOS ──────────────────────────────────────────────────────────
+def _get_uptime() -> str:
+    try:
+        if SYSTEM == "Linux":
+            with open("/proc/uptime") as f:
+                uptime_sec = float(f.read().split()[0])
+            hours = int(uptime_sec // 3600)
+            minutes = int((uptime_sec % 3600) // 60)
+            return f"{hours}h {minutes}m"
+    except Exception:
+        pass
+    return ""
+
 
 def _macos_command(command: str) -> dict:
     try:
@@ -118,8 +193,6 @@ def _macos_command(command: str) -> dict:
         return {"status": "error", "message": "pip3 install applescript on macOS"}
 
 
-# ─── Linux (Wayland + X11 compatible) ──────────────────────────────
-
 def _linux_command(command: str) -> dict:
     app_map = {
         "code": "code",
@@ -141,7 +214,6 @@ def _linux_command(command: str) -> dict:
         "brightness_down": None,
     }
 
-    # Media keys via pactl
     if command == "volume_up":
         subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"])
         return {"status": "ok", "command": command}
@@ -152,19 +224,15 @@ def _linux_command(command: str) -> dict:
         subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
         return {"status": "ok", "command": command}
 
-    # Media playback via playerctl (if available) or send key via wtype/wlrctl
     if command in ("play_pause", "next", "prev"):
         return _linux_media_playback(command)
 
-    # Brightness via sysfs
     if command in ("brightness_up", "brightness_down"):
         return _linux_brightness(command)
 
-    # Screenshot
     if command == "screenshot":
         return _linux_screenshot()
 
-    # Lock / Sleep
     if command == "lock":
         subprocess.run(["loginctl", "lock-session"])
         return {"status": "ok", "command": command}
@@ -172,7 +240,6 @@ def _linux_command(command: str) -> dict:
         subprocess.run(["systemctl", "suspend"])
         return {"status": "ok", "command": command}
 
-    # Launch app
     app = app_map.get(command, command)
     if app is None:
         return {"status": "error", "message": f"No mapping for: {command}"}
@@ -240,7 +307,7 @@ def _linux_brightness(command: str) -> dict:
         arg = "5%+" if "up" in command else "5%-"
         subprocess.run(["brightnessctl", "s", arg])
         return {"status": "ok", "command": command}
-        
+
     if _check_tool("xbacklight"):
         arg = "+5" if "up" in command else "-5"
         subprocess.run(["xbacklight", arg])
@@ -289,8 +356,6 @@ def _linux_screenshot() -> dict:
     return {"status": "error", "message": "No screenshot tool (install spectacle, grim, scrot, or gnome-screenshot)"}
 
 
-# ─── Windows ────────────────────────────────────────────────────────
-
 def _windows_command(command: str) -> dict:
     app_map = {
         "code": "code",
@@ -301,7 +366,8 @@ def _windows_command(command: str) -> dict:
 
     if command in ("volume_up", "volume_down", "mute", "play_pause", "next", "prev"):
         try:
-            import win32api, win32con
+            import win32api
+            import win32con
             vk = {"volume_up": 0xAF, "volume_down": 0xAE, "mute": 0xAD,
                   "play_pause": 0xB3, "next": 0xB0, "prev": 0xB1}[command]
             win32api.keybd_event(vk, 0, 0, 0)
@@ -310,16 +376,19 @@ def _windows_command(command: str) -> dict:
             return {"status": "error", "message": "pip3 install pywin32 on Windows"}
         return {"status": "ok", "command": command}
 
+    if command == "lock":
+        subprocess.Popen(["rundll32.exe", "user32.dll,LockWorkStation"])
+        return {"status": "ok", "command": command}
+
     app = app_map.get(command, command)
     subprocess.Popen(["start", app], shell=True)
     return {"status": "ok", "command": command}
 
 
-# ─── WebSocket Server ──────────────────────────────────────────────
-
 async def handler(websocket):
     addr = websocket.remote_address
     log.info(f"Client connected: {addr}")
+    CONNECTED_CLIENTS.add(websocket)
     try:
         async for message in websocket:
             log.info(f"Received: {message}")
@@ -332,25 +401,24 @@ async def handler(websocket):
             await websocket.send(json.dumps(result))
     except websockets.exceptions.ConnectionClosed:
         pass
-    log.info(f"Client disconnected: {addr}")
+    finally:
+        CONNECTED_CLIENTS.discard(websocket)
+        log.info(f"Client disconnected: {addr}")
 
 
 def get_best_local_ip():
     try:
-        import ifaddr
         best_ip = None
         for adapter in ifaddr.get_adapters():
             name = adapter.name.lower()
-            # Filter out loopback, docker, bridge, and known VPN/tunnel interfaces
             if name == 'lo' or name.startswith('docker') or name.startswith('br-') or name.startswith('veth') or 'warp' in name or name.startswith('tun') or name.startswith('wg'):
                 continue
             for ip in adapter.ips:
                 if isinstance(ip.ip, str) and not ip.ip.startswith("127.") and not ip.ip.startswith("169.254."):
-                    return ip.ip  # Return the first physical/WiFi IP found
+                    return ip.ip
     except ImportError:
         pass
-        
-    # Fallback if ifaddr fails
+
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -361,9 +429,23 @@ def get_best_local_ip():
         return "127.0.0.1"
 
 
+async def heartbeat():
+    while True:
+        await asyncio.sleep(30)
+        if CONNECTED_CLIENTS:
+            dead = set()
+            for ws in CONNECTED_CLIENTS:
+                try:
+                    pong = await asyncio.wait_for(ws.ping(), timeout=5)
+                except Exception:
+                    dead.add(ws)
+            for ws in dead:
+                CONNECTED_CLIENTS.discard(ws)
+
+
 async def main():
-    # Check for updates in the background
-    asyncio.create_task(asyncio.to_thread(updater.check_for_updates))
+    if SYSTEM == "Linux":
+        asyncio.create_task(asyncio.to_thread(updater.check_for_updates))
 
     host = "0.0.0.0"
     port = 9090
@@ -377,19 +459,22 @@ async def main():
     print("/ ____/ / / / /_/ / / / /  __/ /_/ /  __/ /__/ ,<   ")
     print("/_/   /_/ /_/\\____/_/ /_/\\___/_____/\\___/\\___/_/|_| \033[0m")
     print()
-    print("  \033[1;35mBuilt with ❤️ by @iamhero337\033[0m")
+    print("  \033[1;35mBuilt with \u2764 by @iamhero337\033[0m")
+    print("  \033[1;33mVersion: \033[0m\033[1;97m{}\033[0m".format(updater.CURRENT_VERSION))
+    print("  \033[1;33mOS: \033[0m\033[1;97m{}\033[0m".format(SYSTEM))
+    print("  \033[1;33mHostname: \033[0m\033[1;97m{}\033[0m".format(socket.gethostname()))
+    print("  \033[1;33mAuto-connect IP: \033[0m\033[1;97m{}\033[0m".format(local_ip))
     print("  ╔══════════════════════════════════════╗")
     print("  ║      \033[1;36mPhoneDeck Desktop Server\033[0m        ║")
     print("  ╠══════════════════════════════════════╣")
     print(f"  ║  \033[33mConnect from PhoneDeck app to:\033[0m      ║")
-    print(f"  ║  ws://{local_ip:<21}{port} ║")
+    print(f"  ║  ws://{local_ip}:{port:<26} ║")
     print("  ║                                      ║")
     print("  ║  \033[32mThe app will now auto-discover\033[0m      ║")
     print("  ║  \033[32mthis server using mDNS.\033[0m             ║")
     print("  ╚══════════════════════════════════════╝")
     print()
 
-    # Register mDNS service
     hostname = socket.gethostname()
     unique_id = uuid.uuid4().hex[:6]
     info = AsyncServiceInfo(
@@ -400,32 +485,42 @@ async def main():
         properties={},
         server=f"{hostname}.local."
     )
-    
+
     zc = AsyncZeroconf()
     await zc.async_register_service(info)
+
+    asyncio.create_task(heartbeat())
+
+    stop = asyncio.Future()
+
+    def shutdown_handler(sig, frame):
+        if not stop.done():
+            stop.set_result(None)
+
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
 
     try:
         async with websockets.serve(handler, host, port):
             log.info(f"Listening on {host}:{port}")
-            await asyncio.Future()
+            await stop
     finally:
         await zc.async_unregister_service(info)
         await zc.async_close()
+        log.info("Server stopped")
 
 
 def auto_install_linux_service():
     if SYSTEM != "Linux":
         return
-        
-    import sys
+
     current_exe = os.path.abspath(sys.argv[0])
-    
-    # Don't auto install if running from the systemd install location
+
     target_bin = os.path.expanduser("~/.local/bin/phonedeck-server")
+
     if current_exe == target_bin:
         return
-        
-    # Check if this is running as a compiled PyInstaller executable
+
     if not getattr(sys, 'frozen', False):
         return
 
@@ -434,6 +529,8 @@ def auto_install_linux_service():
     print("╚══════════════════════════════════════╝")
     if not os.path.exists(target_bin):
         print("Installing background service...")
+
+    os.makedirs(os.path.dirname(target_bin), exist_ok=True)
     try:
         shutil.copyfile(current_exe, target_bin)
         os.chmod(target_bin, 0o755)
@@ -444,37 +541,48 @@ def auto_install_linux_service():
             print("You can just open your PhoneDeck Android app and connect.\n")
             return
         raise
-    
+
     service_content = f"""[Unit]
 Description=PhoneDeck Companion Server
 After=network.target
+Wants=network-online.target
 
 [Service]
 ExecStart={target_bin}
 Restart=always
-RestartSec=5
+RestartSec=3
+StartLimitBurst=5
+StartLimitIntervalSec=30
 
 [Install]
 WantedBy=default.target
 """
     systemd_dir = os.path.expanduser("~/.config/systemd/user")
     os.makedirs(systemd_dir, exist_ok=True)
-    
+
     service_path = os.path.join(systemd_dir, "phonedeck.service")
     with open(service_path, "w") as f:
         f.write(service_content)
-        
+
     try:
+        subprocess.run(["loginctl", "enable-linger", os.environ.get("USER", "")],
+                       capture_output=True)
         subprocess.check_call(["systemctl", "--user", "daemon-reload"])
         subprocess.check_call(["systemctl", "--user", "enable", "--now", "phonedeck.service"])
         print("\n✅ Successfully installed and started in the background!")
+        print("✅ Auto-start on login enabled.")
         print("You can safely close this terminal. It will always start automatically.")
         print("Just open your PhoneDeck Android app and enjoy.")
         sys.exit(0)
     except subprocess.CalledProcessError as e:
         print(f"Failed to start systemd service: {e}")
 
+
 if __name__ == "__main__":
+    if "--install" in sys.argv:
+        auto_install_linux_service()
+        sys.exit(0)
+
     auto_install_linux_service()
     try:
         asyncio.run(main())

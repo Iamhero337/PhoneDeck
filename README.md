@@ -6,6 +6,7 @@
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Platform: Android | Windows | macOS | Linux](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue)](#)
+  [![Version](https://img.shields.io/badge/Version-v1.2.0-green)](#)
 </div>
 
 ---
@@ -15,9 +16,11 @@
 - 🚀 **Zero Configuration:** Auto-discovery via mDNS. No typing IPs manually.
 - 💻 **Cross-Platform:** Works out-of-the-box on Linux, Windows, and macOS.
 - 🛠️ **Fully Customizable:** Easily add your own custom commands or apps.
-- 🌐 **Dynamic Top Sites:** Dynamically add your favorite websites directly in the Android app to launch them on your desktop!
+- 🌐 **Dynamic Top Sites:** Add your favorite websites directly in the Android app to launch them on your desktop!
+- 🔄 **Auto-Reconnect:** Automatically reconnects with exponential backoff if the connection drops.
 - ⚡ **Lightning Fast:** Powered by local WebSockets for instantaneous response.
 - 🔋 **Lightweight:** Negligible impact on battery life and system resources.
+- 🖥️ **PC Power Control:** Restart, shutdown, logout, sleep, and hibernate your computer remotely.
 
 ## 🛠️ One-Time Setup
 
@@ -35,7 +38,7 @@ Download the latest `PhoneDeck.apk` from the [Releases](https://github.com/iamhe
 
 **For Linux:**
 You have two options on Linux:
-1. **Standalone Binary:** Download `phonedeck-server-linux` from the [Releases](https://github.com/iamhero337/PhoneDeck/releases) tab. Make it executable (`chmod +x phonedeck-server-linux`) and run it. You can add this to your desktop environment's autostart list.
+1. **Standalone Binary:** Download `phonedeck-server-linux` from the [Releases](https://github.com/iamhero337/PhoneDeck/releases) tab. Make it executable (`chmod +x phonedeck-server-linux`) and run it.
 2. **systemd Background Service (Recommended):**
    - Clone this repository or download the source.
    - Run the automated install script:
@@ -45,7 +48,7 @@ You have two options on Linux:
      ```
    This installs the companion server as a systemd user service. It starts on boot, restarts on failure, and stays out of your way!
 
-**For macOS (Background execution):**
+**For macOS:**
 1. Ensure Python 3 is installed.
 2. Download the source and run `python3 companion/server.py`. (You can set this up as a Login Item or `launchd` service).
 
@@ -62,13 +65,15 @@ You have two options on Linux:
 |------|-------|
 | **Prod** | VS Code, Terminal, Browser, Spotify |
 | **Design** | Figma, Photoshop, Illustrator, Preview |
-| **Media** | Volume Up/Down, Mute, Play/Pause, Next/Prev |
-| **System** | Brightness Up/Down, Screenshot, Lock, Sleep |
+| **Media** | Volume Up/Down, Mute, Play/Pause, Next/Prev, Brightness +, Brightness - |
+| **System** | Screenshot, Lock, Sleep, Browser, **Restart**, **Shutdown**, **Logout**, **Hibernate** |
 | **Top Sites** | Dynamically add your favorite websites in the app! |
 
 ### 🌐 Adding Top Sites
-You can now dynamically add your favorite websites directly from the app! 
 Navigate to the **Top Sites** page in the Android app and tap the `+` icon in the top right corner. Enter the site name and URL (e.g. `youtube.com`). It will automatically save to your phone and launch seamlessly on your desktop's default browser whenever you tap it!
+
+### 🖥️ PC Power Control
+PhoneDeck can remotely restart, shutdown, logout, sleep, or hibernate your computer. These commands are available on the **System** page. Use them responsibly!
 
 ### Adding Custom Commands
 Want to add a macro, a script, or a new app? 

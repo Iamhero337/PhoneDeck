@@ -18,6 +18,7 @@ import com.phonedeck.android.ui.components.ConnectionBadge
 import com.phonedeck.android.ui.components.PageIndicator
 import com.phonedeck.android.ui.components.TileGrid
 import com.phonedeck.android.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,130 +28,151 @@ fun MainScreen(viewModel: MainViewModel) {
     val connectionStatus by viewModel.connectionStatus.collectAsState()
     val connected by viewModel.connected.collectAsState()
     val discoveredServerIp by viewModel.discoveredServerIp.collectAsState()
+    val lastCommandResult by viewModel.lastCommandResult.collectAsState()
 
     var showConnectDialog by remember { mutableStateOf(false) }
     var serverIp by remember { mutableStateOf("") }
-    
-    // Auto-fill IP when discovered
+
     LaunchedEffect(discoveredServerIp) {
         if (discoveredServerIp.isNotBlank() && serverIp.isBlank()) {
             serverIp = discoveredServerIp
         }
     }
-    
+
     var showAddSiteDialog by remember { mutableStateOf(false) }
     var newSiteName by remember { mutableStateOf("") }
     var newSiteUrl by remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F0F1A))
-    ) {
-        TopAppBar(
-            title = {
-                Text(
-                    "PhoneDeck",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(lastCommandResult) {
+        lastCommandResult?.let {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = it,
+                    duration = SnackbarDuration.Short
                 )
-            },
-            actions = {
-                if (currentPageIndex < pages.size && pages[currentPageIndex].id == "top_sites") {
-                    IconButton(onClick = { showAddSiteDialog = true }) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Add Site",
-                            tint = Color(0xFF4A90D9)
-                        )
-                    }
-                }
-                if (!connected) {
-                    IconButton(onClick = { showConnectDialog = true }) {
-                        Icon(
-                            Icons.Default.CastConnected,
-                            contentDescription = "Connect",
-                            tint = Color(0xFF4A90D9)
-                        )
-                    }
-                } else {
-                    IconButton(onClick = { showConnectDialog = true }) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color(0xFF8888AA)
-                        )
-                    }
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF0F0F1A),
-                titleContentColor = Color.White
-            )
-        )
+            }
+            viewModel.clearCommandResult()
+        }
+    }
 
-        if (pages.isNotEmpty() && currentPageIndex < pages.size) {
-            val currentPage = pages[currentPageIndex]
-
-            PageIndicator(
-                pageCount = pages.size,
-                currentPage = currentPageIndex,
-                pages = pages,
-                onPageSelected = { viewModel.selectPage(it) }
-            )
-
-            ConnectionBadge(
-                connected = connected,
-                label = connectionStatus
-            )
-
-            Box(modifier = Modifier.weight(1f)) {
-                TileGrid(
-                    page = currentPage,
-                    connected = connected,
-                    onTileTap = { tile ->
-                        viewModel.sendCommand(tile.command)
-                    }
-                )
-
-                if (!connected) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color(0xFF0F0F1A)
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0F0F1A))
+                .padding(paddingValues)
+        ) {
+            TopAppBar(
+                title = {
+                    Text(
+                        "PhoneDeck",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    )
+                },
+                actions = {
+                    if (currentPageIndex < pages.size && pages[currentPageIndex].id == "top_sites") {
+                        IconButton(onClick = { showAddSiteDialog = true }) {
                             Icon(
-                                Icons.Default.WifiOff,
-                                contentDescription = null,
-                                tint = Color(0xFF555566),
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "No desktop connected",
-                                color = Color(0xFF8888AA),
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Tap the connect icon to connect",
-                                color = Color(0xFF555566),
-                                fontSize = 13.sp
+                                Icons.Default.Add,
+                                contentDescription = "Add Site",
+                                tint = Color(0xFF4A90D9)
                             )
                         }
                     }
-                }
-            }
-
-            Text(
-                text = "Built with ❤️ by @iamhero337",
-                color = Color(0xFF555566),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
+                    if (!connected) {
+                        IconButton(onClick = { showConnectDialog = true }) {
+                            Icon(
+                                Icons.Default.CastConnected,
+                                contentDescription = "Connect",
+                                tint = Color(0xFF4A90D9)
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = { showConnectDialog = true }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color(0xFF8888AA)
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0F0F1A),
+                    titleContentColor = Color.White
+                )
             )
+
+            if (pages.isNotEmpty() && currentPageIndex < pages.size) {
+                val currentPage = pages[currentPageIndex]
+
+                PageIndicator(
+                    pageCount = pages.size,
+                    currentPage = currentPageIndex,
+                    pages = pages,
+                    onPageSelected = { viewModel.selectPage(it) }
+                )
+
+                ConnectionBadge(
+                    connected = connected,
+                    label = connectionStatus
+                )
+
+                Box(modifier = Modifier.weight(1f)) {
+                    TileGrid(
+                        page = currentPage,
+                        connected = connected,
+                        onTileTap = { tile ->
+                            viewModel.sendCommand(tile.command)
+                        }
+                    )
+
+                    if (!connected) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.WifiOff,
+                                    contentDescription = null,
+                                    tint = Color(0xFF555566),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "No desktop connected",
+                                    color = Color(0xFF8888AA),
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Tap the connect icon to connect",
+                                    color = Color(0xFF555566),
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Built with \u2764 by @iamhero337",
+                    color = Color(0xFF555566),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                )
+            }
         }
     }
 
@@ -167,8 +189,15 @@ fun MainScreen(viewModel: MainViewModel) {
                 Column {
                     if (connected) {
                         Text("Connected to server at $connectionStatus")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Host: $discoveredServerIp",
+                            color = Color(0xFF8888AA),
+                            fontSize = 13.sp
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         TextButton(onClick = {
+                            viewModel.disconnect()
                             serverIp = ""
                             showConnectDialog = false
                         }) {
@@ -195,7 +224,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         Spacer(modifier = Modifier.height(8.dp))
                         if (discoveredServerIp.isNotBlank() && serverIp == discoveredServerIp) {
                             Text(
-                                "✅ Laptop auto-detected! Click connect.",
+                                "\u2705 Laptop auto-detected! Click connect.",
                                 color = Color(0xFF4CAF50),
                                 fontSize = 13.sp
                             )

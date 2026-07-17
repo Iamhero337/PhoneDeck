@@ -55,6 +55,10 @@ object ConfigRepository {
                 Tile("sys2", "Lock", "lock", "lock"),
                 Tile("sys3", "Sleep", "bedtime", "sleep"),
                 Tile("sys4", "Browser", "public", "browser"),
+                Tile("sys5", "Restart", "restart", "restart"),
+                Tile("sys6", "Shutdown", "shutdown", "shutdown"),
+                Tile("sys7", "Logout", "logout", "logout"),
+                Tile("sys8", "Hibernate", "hibernate", "hibernate"),
             )
         ),
     )
@@ -100,7 +104,7 @@ object ConfigRepository {
         topSitesTiles.add(Tile(
             id = UUID.randomUUID().toString(),
             label = label,
-            icon = "public", // We'll just use a generic globe icon for all websites for reliability
+            icon = "public",
             command = "open_url:$url"
         ))
         saveTopSites()
