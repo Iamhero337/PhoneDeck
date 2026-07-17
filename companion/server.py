@@ -408,11 +408,18 @@ def auto_install_linux_service():
     print("╔══════════════════════════════════════╗")
     print("║   PhoneDeck Auto-Install (Linux)     ║")
     print("╚══════════════════════════════════════╝")
-    print("Installing background service...")
-    
-    os.makedirs(os.path.expanduser("~/.local/bin"), exist_ok=True)
-    shutil.copy2(current_exe, target_bin)
-    os.chmod(target_bin, 0o755)
+    if not os.path.exists(target_bin):
+        print("Installing background service...")
+    try:
+        shutil.copyfile(current_exe, target_bin)
+        os.chmod(target_bin, 0o755)
+    except OSError as e:
+        import errno
+        if e.errno == errno.ETXTBSY:
+            print("\n✅ Background service is already installed and running perfectly!")
+            print("You can just open your PhoneDeck Android app and connect.\n")
+            return
+        raise
     
     service_content = f"""[Unit]
 Description=PhoneDeck Companion Server
@@ -448,5 +455,11 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nServer stopped.")
-
+        pass
+    except OSError as e:
+        import errno
+        if e.errno in (errno.EADDRINUSE, 10048):
+            print("\n✅ PhoneDeck Server is already actively running in the background on port 9090!")
+            print("Open the PhoneDeck app on your phone, and it will connect automatically.\n")
+        else:
+            raise
