@@ -10,10 +10,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import com.phonedeck.android.network.MdnsScanner
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val client = PhoneDeckClient()
+    private val mdnsScanner = MdnsScanner(application)
+    private var discoveryJob: Job? = null
 
     private val _pages = MutableStateFlow<List<Page>>(emptyList())
     val pages: StateFlow<List<Page>> = _pages.asStateFlow()
@@ -30,6 +34,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         ConfigRepository.init(application)
         _pages.value = ConfigRepository.getPages()
+        startDiscovery()
+    }
+
+    private fun startDiscovery() {
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            mdnsScanner.discoverServices().collect { serviceInfo ->
+                if (!_connected.value) {
+                    val host = serviceInfo.host.hostAddress
+                    val port = serviceInfo.port
+                    if (host != null) {
+                        connect(host, port)
+                    }
+                }
+            }
+        }
     }
 
     fun connect(host: String, port: Int = 9090) {

@@ -31,7 +31,7 @@ missing module named pyimod02_importers - imported by /home/hero/.local/lib/pyth
 missing module named win32con - imported by /home/hero/Documents/Gits/Androiddeck/companion/server.py (delayed, conditional, optional)
 missing module named win32api - imported by /home/hero/Documents/Gits/Androiddeck/companion/server.py (delayed, conditional, optional)
 missing module named applescript - imported by /home/hero/Documents/Gits/Androiddeck/companion/server.py (delayed, optional)
-missing module named zeroconf - imported by /home/hero/Documents/Gits/Androiddeck/companion/server.py (optional)
+missing module named 'ctypes.macholib' - imported by ctypes.util (conditional)
 missing module named _uuid - imported by uuid (optional)
 missing module named websockets.speedups - imported by websockets.frames (optional), websockets.legacy.framing (optional)
 missing module named vms_lib - imported by platform (delayed, optional)
