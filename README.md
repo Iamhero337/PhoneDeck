@@ -16,6 +16,7 @@
 - 🚀 **Zero Configuration:** Auto-discovery via mDNS. No typing IPs manually.
 - 💻 **Cross-Platform:** Works out-of-the-box on Linux, Windows, and macOS.
 - 🛠️ **Fully Customizable:** Easily add your own custom commands or apps.
+- 🌐 **Dynamic Top Sites:** Dynamically add your favorite websites directly in the Android app to launch them on your desktop!
 - ⚡ **Lightning Fast:** Powered by local WebSockets for instantaneous response.
 - 🔋 **Lightweight:** Negligible impact on battery life and system resources.
 
@@ -64,6 +65,11 @@ You have two options on Linux:
 | **Design** | Figma, Photoshop, Illustrator, Preview |
 | **Media** | Volume Up/Down, Mute, Play/Pause, Next/Prev |
 | **System** | Brightness Up/Down, Screenshot, Lock, Sleep |
+| **Top Sites** | Dynamically add your favorite websites in the app! |
+
+### 🌐 Adding Top Sites
+You can now dynamically add your favorite websites directly from the app! 
+Navigate to the **Top Sites** page in the Android app and tap the `+` icon in the top right corner. Enter the site name and URL (e.g. `youtube.com`). It will automatically save to your phone and launch seamlessly on your desktop's default browser whenever you tap it!
 
 ### Adding Custom Commands
 Want to add a macro, a script, or a new app? 
