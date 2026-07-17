@@ -4,7 +4,6 @@
   <p><strong>Turn your Android phone into a wireless productivity controller for your computer.</strong></p>
   <p>Like a Stream Deck, but completely free and open-source.</p>
 
-  [![Build Companion Apps](https://github.com/iamhero337/PhoneDeck/actions/workflows/build-companion.yml/badge.svg)](https://github.com/iamhero337/PhoneDeck/actions)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Platform: Android | Windows | macOS | Linux](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue)](#)
 </div>
