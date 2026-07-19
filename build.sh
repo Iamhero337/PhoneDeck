@@ -6,25 +6,33 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="$ROOT_DIR/build-output"
-VERSION="1.3.0"
-DATE=$(date +"%Y%m%d-%H%M%S")
 
+# Extract version from app/build.gradle.kts
+VERSION=$(grep 'versionName' "$ROOT_DIR/app/build.gradle.kts" | sed 's/.*"\(.*\)".*/\1/')
+VERSION_CODE=$(grep 'versionCode' "$ROOT_DIR/app/build.gradle.kts" | sed 's/.*= \([0-9]*\)/\1/')
 echo "╔══════════════════════════════════════════╗"
-echo "║    PhoneDeck Local Build v$VERSION         ║"
+echo "║    PhoneDeck Local Build v$VERSION (code $VERSION_CODE)   ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
-mkdir -p "$BUILD_DIR"
+# Clean downloads/
+echo "[0/4] Cleaning downloads/..."
+rm -f "$ROOT_DIR/downloads/PhoneDeck-*.apk" "$ROOT_DIR/downloads/phonedeck-server-*"
 
 # ========== Android Build ==========
 echo "[1/4] Building Android APK..."
 cd "$ROOT_DIR"
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease --no-daemon
 
-if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-    cp "app/build/outputs/apk/release/app-release-unsigned.apk" "$BUILD_DIR/PhoneDeck-v$VERSION-$DATE.apk"
-    echo "✅ Android: $BUILD_DIR/PhoneDeck-v$VERSION-$DATE.apk"
+APK_SIGNED="app/build/outputs/apk/release/app-release.apk"
+APK_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+
+if [ -f "$APK_SIGNED" ]; then
+    cp "$APK_SIGNED" "$ROOT_DIR/downloads/PhoneDeck-v$VERSION.apk"
+    echo "✅ Android: $ROOT_DIR/downloads/PhoneDeck-v$VERSION.apk"
+elif [ -f "$APK_UNSIGNED" ]; then
+    cp "$APK_UNSIGNED" "$ROOT_DIR/downloads/PhoneDeck-v$VERSION.apk"
+    echo "⚠️  Android: unsigned APK at $ROOT_DIR/downloads/PhoneDeck-v$VERSION.apk"
 else
     echo "❌ Android build failed - APK not found"
     exit 1
@@ -34,41 +42,21 @@ fi
 echo ""
 echo "[2/4] Building Linux binary..."
 cd "$ROOT_DIR/companion"
-pyinstaller --clean --noconfirm phonedeck-server-linux.spec
-
-if [ -f "dist/phonedeck-server-linux" ]; then
-    cp "dist/phonedeck-server-linux" "$BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
-    chmod +x "$BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
-    echo "✅ Linux: $BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
-else
-    echo "⚠️  Linux binary not found (run on Linux)"
-fi
-
-# ========== Windows Build ==========
-echo ""
-echo "[3/4] Building Windows binary..."
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    pyinstaller --clean --noconfirm phonedeck-server-windows.spec
-    if [ -f "dist/phonedeck-server-windows.exe" ]; then
-        cp "dist/phonedeck-server-windows.exe" "$BUILD_DIR/phonedeck-server-windows-v$VERSION-$DATE.exe"
-        echo "✅ Windows: $BUILD_DIR/phonedeck-server-windows-v$VERSION-$DATE.exe"
+if command -v pyinstaller &> /dev/null; then
+    BUILD_DIR="/tmp/phonedeck-build-$$"
+    DIST_DIR="/tmp/phonedeck-dist-$$"
+    pyinstaller --clean --noconfirm --workpath "$BUILD_DIR" --distpath "$DIST_DIR" phonedeck-server-linux.spec
+    if [ -f "$DIST_DIR/phonedeck-server-linux" ]; then
+        cp "$DIST_DIR/phonedeck-server-linux" "$ROOT_DIR/downloads/phonedeck-server-linux-v$VERSION"
+        chmod +x "$ROOT_DIR/downloads/phonedeck-server-linux-v$VERSION"
+        rm -rf "$BUILD_DIR" "$DIST_DIR"
+        echo "✅ Linux: $ROOT_DIR/downloads/phonedeck-server-linux-v$VERSION"
+    else
+        echo "⚠️  Linux binary not found after build"
+        rm -rf "$BUILD_DIR" "$DIST_DIR"
     fi
 else
-    echo "⏭️  Skipping Windows (run on Windows): pyinstaller --clean phonedeck-server-windows.spec"
-fi
-
-# ========== macOS Build ==========
-echo ""
-echo "[4/4] Building macOS binary..."
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    pyinstaller --clean --noconfirm --onefile server.py --name phonedeck-server-macos
-    if [ -f "dist/phonedeck-server-macos" ]; then
-        cp "dist/phonedeck-server-macos" "$BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
-        chmod +x "$BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
-        echo "✅ macOS: $BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
-    fi
-else
-    echo "⏭️  Skipping macOS (run on macOS): pyinstaller --clean --onefile server.py --name phonedeck-server-macos"
+    echo "⚠️  pyinstaller not found - skipping Linux binary build"
 fi
 
 # ========== Summary ==========
@@ -77,7 +65,7 @@ echo "╔═══════════════════════�
 echo "║           Build Complete!              ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
-ls -la "$BUILD_DIR"
+ls -la "$ROOT_DIR/downloads/"
 echo ""
-echo "📦 Upload these to GitHub Release manually:"
+echo "📦 Artifacts in downloads/ ready for GitHub Release:"
 echo "   https://github.com/iamhero337/PhoneDeck/releases/new"

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import org.json.JSONObject
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -46,11 +47,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val lastCommandResult: StateFlow<String?> = _lastCommandResult.asStateFlow()
 
     private var connectedHost = ""
+    private var responseJob: Job? = null
 
     init {
         ConfigRepository.init(application)
         loadPages()
         startDiscovery()
+        collectCommandResponses()
+    }
+
+    private fun collectCommandResponses() {
+        responseJob?.cancel()
+        responseJob = viewModelScope.launch {
+            client.commandResponses.collect { response ->
+                try {
+                    val json = JSONObject(response)
+                    val status = json.optString("status", "")
+                    val command = json.optString("command", "")
+                    if (status == "error") {
+                        val msg = json.optString("message", "Unknown error")
+                        _lastCommandResult.value = "$command: $msg"
+                    } else {
+                        _lastCommandResult.value = "$command: OK"
+                    }
+                } catch (_: Exception) {
+                    _lastCommandResult.value = "Server: $response"
+                }
+            }
+        }
     }
 
     private fun loadPages() {
@@ -63,10 +87,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             mdnsScanner.discoverServices().collect { serviceInfo ->
-                if (!_connected.value && _discoveredServerIp.value.isBlank()) {
-                    val host = serviceInfo.host.hostAddress
-                    if (host != null) {
-                        _discoveredServerIp.value = host
+                val host = serviceInfo.host.hostAddress
+                if (host != null) {
+                    _discoveredServerIp.value = host
+                    if (!_connected.value && ConfigRepository.getAutoConnect()) {
                         connect(host)
                     }
                 }
@@ -133,7 +157,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             vibrator.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
         }
         client.sendCommand(command)
-        _lastCommandResult.value = "Sent: $command"
+        _lastCommandResult.value = "Sending: $command..."
     }
 
     fun addTopSite(label: String, url: String) {

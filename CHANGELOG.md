@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-07-19
+
+### Fixed
+- **Manual Connect UI completely overhauled:** Prominent connect/disconnect button with proper full-width layout in Settings screen; added "Connect to Desktop" button on main screen when disconnected
+- **Update checker now uses semantic version comparison:** No more false "update available" dialog when local version is newer than GitHub release
+- **Auto-connect toggle now respected:** Disabling auto-connect in settings prevents automatic connection on server discovery (IP is still shown for manual use)
+- **build.sh rewritten:** Extracts version dynamically from `build.gradle.kts`, copies artifacts to `downloads/` folder, builds companion binary
+- **Hardcoded versions updated:** Settings screen displays v1.3.1, config export uses correct version
+- **Dead code removed:** Unreachable ConnectDialog in MainScreen replaced with working connect button
+- **All documentation updated:** README, CHANGELOG, PROGRESS, RELEASE_RULES, ARCHITECTURE synced to v1.3.1
+
 ## [1.3.0] - 2026-07-19
 
 ### Added

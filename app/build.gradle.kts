@@ -12,8 +12,8 @@ android {
         applicationId = "com.phonedeck.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.3.1"
+        versionCode = 14
+        versionName = "1.3.6"
     }
 
     signingConfigs {

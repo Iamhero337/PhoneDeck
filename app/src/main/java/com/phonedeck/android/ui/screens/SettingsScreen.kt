@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.phonedeck.android.data.models.Page
 import com.phonedeck.android.data.models.Tile
 import com.phonedeck.android.data.repository.ConfigRepository
+import com.phonedeck.android.data.repository.CrashLogger
 import com.phonedeck.android.ui.theme.PhoneDeckTheme
 import com.phonedeck.android.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -51,6 +52,8 @@ fun SettingsScreen(
     var showAddPageDialog by remember { mutableStateOf(false) }
     var newPageName by remember { mutableStateOf("") }
     var newPageIcon by remember { mutableStateOf("apps") }
+    var showDebugDialog by remember { mutableStateOf(false) }
+    val lastCrash = remember { mutableStateOf(CrashLogger.getLastCrash()) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -121,68 +124,73 @@ fun SettingsScreen(
                         }
                     )
                     Divider(color = Color(0xFF3A3A4E))
-                    SettingsRow(
-                        title = "Manual Connect",
-                        subtitle = "Connect/disconnect from desktop server",
-                        trailing = {
-                            if (connected) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = "Connected to $connectionStatus",
-                                        color = Color(0xFF4CAF50),
-                                        fontSize = 12.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    TextButton(onClick = { viewModel.disconnect() }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE53935))) {
-                                        Text("Disconnect", color = Color(0xFFE53935))
-                                    }
-                                }
-                            } else {
-                                var manualIp by remember { mutableStateOf("") }
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    if (discoveredServerIp.isNotBlank()) {
-                                        Text(
-                                            text = "Auto-detected: $discoveredServerIp",
-                                            color = Color(0xFF4A90D9),
-                                            fontSize = 12.sp
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        OutlinedTextField(
-                                            value = manualIp,
-                                            onValueChange = { manualIp = it },
-                                            label = { Text("IP Address") },
-                                            placeholder = { Text("192.168.x.x") },
-                                            singleLine = true,
-                                            modifier = Modifier.width(140.dp).weight(1f),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = Color(0xFF4A90D9),
-                                                unfocusedBorderColor = Color(0xFF3A3A4E),
-                                                focusedLabelColor = Color(0xFF4A90D9),
-                                                unfocusedLabelColor = Color(0xFF8888AA),
-                                                cursorColor = Color(0xFF4A90D9),
-                                                focusedTextColor = Color.White,
-                                                unfocusedTextColor = Color.White
-                                            )
-                                        )
-                                        TextButton(onClick = { if (manualIp.isNotBlank()) viewModel.connect(manualIp.trim()) }, enabled = manualIp.isNotBlank()) {
-                                            Text("Connect", color = Color(0xFF4A90D9))
-                                        }
-                                    }
-                                }
+
+                    Text("Manual Connect", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("Connect/disconnect from desktop server", color = Color(0xFF8888AA), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (connected) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Connected", color = Color(0xFF4CAF50), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(connectionStatus, color = Color(0xFF8888AA), fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = { viewModel.disconnect() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Disconnect", color = Color.White)
                             }
                         }
-                    )
+                    } else {
+                        var manualIp by remember { mutableStateOf("") }
+                        if (discoveredServerIp.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Wifi, contentDescription = null, tint = Color(0xFF4A90D9), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Auto-detected: $discoveredServerIp", color = Color(0xFF4A90D9), fontSize = 13.sp)
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = manualIp,
+                                onValueChange = { manualIp = it },
+                                label = { Text("IP Address") },
+                                placeholder = { Text("192.168.x.x") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF4A90D9),
+                                    unfocusedBorderColor = Color(0xFF3A3A4E),
+                                    focusedLabelColor = Color(0xFF4A90D9),
+                                    unfocusedLabelColor = Color(0xFF8888AA),
+                                    cursorColor = Color(0xFF4A90D9),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+                            Button(
+                                onClick = { if (manualIp.isNotBlank()) viewModel.connect(manualIp.trim()) },
+                                enabled = manualIp.isNotBlank(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Connect")
+                            }
+                        }
+                    }
                 }
             }
 
@@ -293,7 +301,7 @@ fun SettingsScreen(
 
                     SettingsRow(
                         title = "PhoneDeck",
-                        subtitle = "Version 1.3.0 • Built with ❤️ by @iamhero337",
+                        subtitle = "Version 1.3.5 • Built with ❤️ by @iamhero337",
                         trailing = {}
                     )
                     Divider(color = Color(0xFF3A3A4E))
@@ -312,6 +320,26 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (lastCrash.value.isNotBlank()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2E1A1A)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Debug", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE53935))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("A crash was detected on last launch.", color = Color(0xFFEF9A9A), fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { showDebugDialog = true }) {
+                            Text("View Crash Details", color = Color(0xFFE53935))
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
@@ -322,6 +350,55 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+
+    if (showDebugDialog) {
+        AlertDialog(
+            onDismissRequest = { showDebugDialog = false },
+            title = { Text("Crash Report", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Copy this and send it to the developer:", color = Color(0xFF8888AA), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                            .background(Color(0xFF0F0F1A), RoundedCornerShape(8.dp))
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = lastCrash.value,
+                            color = Color(0xFFEF9A9A),
+                            fontSize = 11.sp,
+                            style = androidx.compose.ui.text.TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clipboard = (viewModel.getApplication() as Context).getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("PhoneDeck Crash", lastCrash.value))
+                    showSnackbar("Crash report copied!")
+                    showDebugDialog = false
+                }) { Text("Copy to Clipboard", color = Color(0xFF4A90D9)) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        CrashLogger.clear()
+                        lastCrash.value = ""
+                        showDebugDialog = false
+                    }) { Text("Clear", color = Color(0xFF8888AA)) }
+                    TextButton(onClick = { showDebugDialog = false }) { Text("Close", color = Color(0xFF8888AA)) }
+                }
+            },
+            containerColor = Color(0xFF1A1A2E),
+            titleContentColor = Color.White,
+            textContentColor = Color.White
+        )
     }
 
     if (showAddPageDialog) {

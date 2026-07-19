@@ -32,17 +32,12 @@
 
 ### 3. Build Locally
 ```bash
-# Android
-JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease
+# Run the unified build script:
+./build.sh
 
-# Linux Server
-cd companion && pyinstaller --clean --noconfirm phonedeck-server-linux.spec
-
-# Windows (on Windows)
-pyinstaller --clean --noconfirm phonedeck-server-windows.spec
-
-# macOS (on macOS)
-pyinstaller --clean --noconfirm --onefile server.py --name phonedeck-server-macos
+# This will:
+# - Build signed APK at downloads/PhoneDeck-vX.Y.Z.apk
+# - Build Linux server binary at downloads/phonedeck-server-linux-vX.Y.Z
 ```
 
 ### 4. Verify Before Release
@@ -53,29 +48,28 @@ grep versionCode app/build.gradle.kts
 # Check APK is signed
 apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 
+# Check downloads/ has artifacts
+ls -la downloads/
+
 # Test install (uninstall old first!)
 adb uninstall com.phonedeck.android
-adb install app/build/outputs/apk/release/app-release.apk
+adb install downloads/PhoneDeck-vX.Y.Z.apk
 ```
 
 ### 5. Release Process
 ```bash
-# 1. Clean downloads
-rm -f downloads/PhoneDeck-*.apk downloads/phonedeck-server-*
+# 1. Build via build.sh (already populates downloads/)
 
-# 2. Copy artifacts
-cp app/build/outputs/apk/release/app-release.apk downloads/PhoneDeck-vX.Y.Z.apk
-cp companion/dist/phonedeck-server-linux downloads/phonedeck-server-linux-vX.Y.Z
-
-# 3. Commit & Tag
+# 2. Commit & Tag
 git add -A
 git commit -m "vX.Y.Z: Release notes"
 git tag vX.Y.Z
 git push origin master
 git push origin vX.Y.Z
 
-# 4. Manual GitHub Release
+# 3. Manual GitHub Release
 # Go to: https://github.com/iamhero337/PhoneDeck/releases/new
+# Tag: vX.Y.Z
 # Upload ALL artifacts from downloads/
 ```
 
@@ -108,7 +102,7 @@ keytool -list -keystore release.keystore -alias phonedeck
 ## 📱 For New Machines / Clean Builds
 
 1. Copy `release.keystore` to repo root
-2. Build locally (not CI)
+2. Run `./build.sh`
 3. VersionCode = previous + 1
 4. Same keystore = seamless updates
 

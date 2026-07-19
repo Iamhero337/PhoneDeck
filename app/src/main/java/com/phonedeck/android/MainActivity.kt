@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.phonedeck.android.data.repository.CrashLogger
 import com.phonedeck.android.ui.screens.MainScreen
 import com.phonedeck.android.ui.theme.PhoneDeckTheme
 import com.phonedeck.android.viewmodel.MainViewModel
@@ -25,11 +26,29 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
 
-const val CURRENT_VERSION = "v1.3.1"
+
+const val CURRENT_VERSION = "v1.3.6"
+
+private fun parseVersion(versionStr: String): List<Int> {
+    val cleaned = versionStr.removePrefix("v")
+    return cleaned.split(".").map { it.toIntOrNull() ?: 0 }
+}
+
+private fun isNewerVersion(latest: String, current: String): Boolean {
+    val latestParts = parseVersion(latest)
+    val currentParts = parseVersion(current)
+    for (i in 0 until maxOf(latestParts.size, currentParts.size)) {
+        val l = latestParts.getOrElse(i) { 0 }
+        val c = currentParts.getOrElse(i) { 0 }
+        if (l != c) return l > c
+    }
+    return false
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLogger.init(applicationContext)
         setContent {
             PhoneDeckTheme {
                 Surface(
@@ -60,7 +79,7 @@ fun UpdateChecker(activity: ComponentActivity) {
                 val response = connection.getInputStream().bufferedReader().use { it.readText() }
                 val json = JSONObject(response)
                 val tag = json.getString("tag_name")
-                if (tag != CURRENT_VERSION) {
+                if (isNewerVersion(tag, CURRENT_VERSION)) {
                     latestVersion.value = tag
                     latestUrl.value = json.getString("html_url")
                     showDialog.value = true

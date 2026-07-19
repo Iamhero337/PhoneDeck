@@ -6,8 +6,7 @@
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Platform: Android | Windows | macOS | Linux](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/iamhero337/PhoneDeck/releases)
-  [![Version](https://img.shields.io/badge/Version-v1.3.0-green)](https://github.com/iamhero337/PhoneDeck/releases)
-  [![Build Status](https://github.com/iamhero337/PhoneDeck/actions/workflows/android.yml/badge.svg)](https://github.com/iamhero337/PhoneDeck/actions)
+  [![Version](https://img.shields.io/badge/Version-v1.3.1-green)](https://github.com/iamhero337/PhoneDeck/releases)
 </div>
 
 ---
@@ -35,7 +34,7 @@ Nobody likes running servers in terminal windows. PhoneDeck is designed for a tr
 ### 1. The Phone App (Android)
 
 **Option A - Pre-built APK (Recommended):**
-Download the latest `PhoneDeck-v1.3.0.apk` from the [Releases](https://github.com/iamhero337/PhoneDeck/releases) tab and install it on your Android phone.
+Download the latest `PhoneDeck-v1.3.1.apk` from the [Releases](https://github.com/iamhero337/PhoneDeck/releases) tab and install it on your Android phone.
 
 **Option B - Build from Source:**
 ```bash
@@ -61,7 +60,7 @@ chmod +x install_linux.sh
 This installs the companion server as a systemd **user service**. It starts on boot, restarts on failure, and stays out of your way!
 
 **Manual Binary Option:**
-Download `phonedeck-server-linux-v1.3.0` from [Releases](https://github.com/iamhero337/PhoneDeck/releases), make it executable (`chmod +x`), and run it.
+Download `phonedeck-server-linux-v1.3.1` from [Releases](https://github.com/iamhero337/PhoneDeck/releases), make it executable (`chmod +x`), and run it.
 
 #### For macOS (LaunchAgent):
 ```bash

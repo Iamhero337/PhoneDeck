@@ -133,7 +133,7 @@ Error response:
 ### mDNS Service
 - **Service Type:** `_phonedeck._tcp.local.`
 - **Port:** 9090
-- **Properties:** `version` (e.g., "1.3.0")
+- **Properties:** `version` (e.g., "1.3.1")
 
 ## 11. Security Considerations
 
@@ -155,10 +155,11 @@ Error response:
 - Windows: `phonedeck-server-windows.spec` → `dist/phonedeck-server-windows.exe`
 - Hidden imports: `websockets`, `zeroconf`, `ifaddr`, `updater`
 
-### CI/CD (GitHub Actions)
-- **Android Workflow:** Builds debug/release APKs, runs lint, uploads artifacts
-- **Desktop Workflow:** Builds Linux/Windows/macOS executables on tag push, creates GitHub Release with assets
+### Local Build
+- **Android:** `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`
+- **Linux Server:** `cd companion && pyinstaller --clean --noconfirm phonedeck-server-linux.spec` → `companion/dist/phonedeck-server-linux`
+- **Unified:** `./build.sh` does both and copies artifacts to `downloads/`
 
 ---
 
-*Architecture version: 1.3.0*
+*Architecture version: 1.3.1*

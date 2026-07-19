@@ -183,5 +183,15 @@ private fun getIconForTile(icon: String) = when (icon) {
     "shutdown" -> Icons.Default.PowerSettingsNew
     "logout" -> Icons.Default.ExitToApp
     "hibernate" -> Icons.Default.Bedtime
+    "smart_display" -> Icons.Default.SmartDisplay
+    "search" -> Icons.Default.Search
+    "forum" -> Icons.Default.Forum
+    "chat" -> Icons.Default.Chat
+    "help" -> Icons.Default.Help
+    "menu_book" -> Icons.Default.MenuBook
+    "cloud" -> Icons.Default.Cloud
+    "api" -> Icons.Default.Api
+    "videocam" -> Icons.Default.Videocam
+    "article" -> Icons.Default.Article
     else -> Icons.Default.Apps
 }

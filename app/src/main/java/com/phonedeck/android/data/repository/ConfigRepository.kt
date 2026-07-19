@@ -23,6 +23,11 @@ object ConfigRepository {
                 Tile("dev2", "Terminal", "terminal", "terminal", 0xFF1E1E2E.toInt(), 0xFF4A90D9.toInt()),
                 Tile("dev3", "Browser", "public", "browser", 0xFF1E1E2E.toInt(), 0xFF4A90D9.toInt()),
                 Tile("dev4", "Spotify", "music_note", "spotify", 0xFF1E1E2E.toInt(), 0xFF1DB954.toInt()),
+                Tile("dev5", "Slack", "chat", "browser", 0xFF1E1E2E.toInt(), 0xFF4A154B.toInt()),
+                Tile("dev6", "Docker", "cloud", "terminal", 0xFF1E1E2E.toInt(), 0xFF2496ED.toInt()),
+                Tile("dev7", "Postman", "api", "browser", 0xFF1E1E2E.toInt(), 0xFFFF6C37.toInt()),
+                Tile("dev8", "Zoom", "videocam", "browser", 0xFF1E1E2E.toInt(), 0xFF2D8CFF.toInt()),
+                Tile("dev9", "Notion", "article", "browser", 0xFF1E1E2E.toInt(), 0xFF000000.toInt()),
             )
         ),
         Page(
@@ -31,8 +36,6 @@ object ConfigRepository {
             tiles = listOf(
                 Tile("ds1", "Figma", "draw", "figma", 0xFF1E1E2E.toInt(), 0xFFF24E1E.toInt()),
                 Tile("ds2", "Photoshop", "image", "photoshop", 0xFF1E1E2E.toInt(), 0xFF31A8FF.toInt()),
-                Tile("ds3", "Illustrator", "brush", "illustrator", 0xFF1E1E2E.toInt(), 0xFFFF9A00.toInt()),
-                Tile("ds4", "Preview", "visibility", "preview", 0xFF1E1E2E.toInt(), 0xFF4A90D9.toInt()),
             )
         ),
         Page(
@@ -45,8 +48,6 @@ object ConfigRepository {
                 Tile("md4", "Play/Pause", "play_pause", "play_pause", 0xFF1E1E2E.toInt(), 0xFF1DB954.toInt()),
                 Tile("md5", "Next", "next", "next", 0xFF1E1E2E.toInt(), 0xFF1DB954.toInt()),
                 Tile("md6", "Prev", "prev", "prev", 0xFF1E1E2E.toInt(), 0xFF1DB954.toInt()),
-                Tile("md7", "Brightness +", "brightness_up", "brightness_up", 0xFF1E1E2E.toInt(), 0xFFFFC107.toInt()),
-                Tile("md8", "Brightness -", "brightness_down", "brightness_down", 0xFF1E1E2E.toInt(), 0xFFFFC107.toInt()),
             )
         ),
         Page(
@@ -61,6 +62,8 @@ object ConfigRepository {
                 Tile("sys6", "Shutdown", "shutdown", "shutdown", 0xFF1E1E2E.toInt(), 0xFFF57C00.toInt()),
                 Tile("sys7", "Logout", "logout", "logout", 0xFF1E1E2E.toInt(), 0xFFF57C00.toInt()),
                 Tile("sys8", "Hibernate", "hibernate", "hibernate", 0xFF1E1E2E.toInt(), 0xFFF57C00.toInt()),
+                Tile("sys9", "Brightness +", "brightness_up", "brightness_up", 0xFF1E1E2E.toInt(), 0xFFFFC107.toInt()),
+                Tile("sys10", "Brightness -", "brightness_down", "brightness_down", 0xFF1E1E2E.toInt(), 0xFFFFC107.toInt()),
             )
         ),
     )
@@ -68,7 +71,34 @@ object ConfigRepository {
     fun init(context: Context) {
         prefs = context.getSharedPreferences("phonedeck_prefs", Context.MODE_PRIVATE)
         loadTopSites()
+        if (topSitesTiles.isEmpty()) {
+            seedDefaultTopSites()
+        }
         loadCustomPages()
+    }
+
+    private fun seedDefaultTopSites() {
+        val defaults = listOf(
+            Triple("YouTube", "youtube.com", "smart_display"),
+            Triple("GitHub", "github.com", "code"),
+            Triple("Google", "google.com", "search"),
+            Triple("Reddit", "reddit.com", "forum"),
+            Triple("ChatGPT", "chatgpt.com", "chat"),
+            Triple("Stack Overflow", "stackoverflow.com", "help"),
+            Triple("Wikipedia", "wikipedia.org", "menu_book"),
+            Triple("Netflix", "netflix.com", "play_arrow"),
+        )
+        defaults.forEach { (label, url, icon) ->
+            topSitesTiles.add(Tile(
+                id = UUID.randomUUID().toString(),
+                label = label,
+                icon = icon,
+                command = "open_url:$url",
+                color = 0xFF1E1E2E.toInt(),
+                iconColor = 0xFF4A90D9.toInt(),
+            ))
+        }
+        saveTopSites()
     }
 
     private fun loadTopSites() {
@@ -244,7 +274,7 @@ object ConfigRepository {
             pagesArray.put(pageObj)
         }
         obj.put("pages", pagesArray)
-        obj.put("version", "1.2.0")
+        obj.put("version", "1.3.5")
         return obj.toString(2)
     }
 

@@ -2,7 +2,9 @@ package com.phonedeck.android.network
 
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -19,6 +21,9 @@ class PhoneDeckClient {
         .build()
 
     private var webSocket: WebSocket? = null
+
+    private val _commandResponses = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val commandResponses: Flow<String> = _commandResponses.asSharedFlow()
 
     sealed class ConnectionState {
         data object Disconnected : ConnectionState()
@@ -46,6 +51,10 @@ class PhoneDeckClient {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 trySend(ConnectionState.Disconnected)
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                _commandResponses.tryEmit(text)
             }
         }
 

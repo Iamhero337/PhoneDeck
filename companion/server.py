@@ -56,7 +56,7 @@ log = logging.getLogger("phonedeck")
 SYSTEM = platform.system()
 CONNECTED_CLIENTS = set()
 
-VERSION = "1.3.1"
+VERSION = "1.3.6"
 PORT = 9090
 
 COMMAND_MAP = {
@@ -380,7 +380,11 @@ def _linux_screenshot() -> dict:
     for cmd, tool in tools:
         if _check_tool(tool):
             subprocess.Popen(cmd)
-            return {"status": "ok"}
+            try:
+                subprocess.Popen(["notify-send", "PhoneDeck", f"Screenshot saved: {filename}"])
+            except Exception:
+                pass
+            return {"status": "ok", "message": f"Screenshot saved to {filename}"}
 
     return {"status": "error", "message": "No screenshot tool (install spectacle, grim, scrot, or gnome-screenshot)"}
 

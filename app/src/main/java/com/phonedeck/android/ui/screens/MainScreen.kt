@@ -2,6 +2,7 @@ package com.phonedeck.android.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -137,12 +138,15 @@ fun MainScreen(viewModel: MainViewModel) {
                                     color = Color(0xFF8888AA),
                                     fontSize = 16.sp
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Tap the settings icon to connect manually",
-                                    color = Color(0xFF555566),
-                                    fontSize = 13.sp
-                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                FilledTonalButton(
+                                    onClick = { showConnectDialog = true },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Connect to Desktop")
+                                }
                             }
                         }
                     }
