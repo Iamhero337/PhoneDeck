@@ -12,13 +12,23 @@ android {
         applicationId = "com.phonedeck.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.3.0"
+        versionCode = 9
+        versionName = "1.3.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../release.keystore")
+            storePassword = "phonedeck123"
+            keyAlias = "phonedeck"
+            keyPassword = "phonedeck123"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

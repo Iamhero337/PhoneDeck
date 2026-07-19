@@ -37,6 +37,8 @@ fun SettingsScreen(
 ) {
     val pages by viewModel.pages.collectAsState()
     val connected by viewModel.connected.collectAsState()
+    val discoveredServerIp by viewModel.discoveredServerIp.collectAsState()
+    val connectionStatus by viewModel.connectionStatus.collectAsState()
     val hapticFeedback = remember { mutableStateOf(ConfigRepository.getHapticFeedback()) }
     val autoConnect = remember { mutableStateOf(ConfigRepository.getAutoConnect()) }
     val serverPort = remember { mutableStateOf(ConfigRepository.getServerPort()) }
@@ -116,6 +118,69 @@ fun SettingsScreen(
                                     unfocusedTextColor = Color.White
                                 )
                             )
+                        }
+                    )
+                    Divider(color = Color(0xFF3A3A4E))
+                    SettingsRow(
+                        title = "Manual Connect",
+                        subtitle = "Connect/disconnect from desktop server",
+                        trailing = {
+                            if (connected) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Text(
+                                        text = "Connected to $connectionStatus",
+                                        color = Color(0xFF4CAF50),
+                                        fontSize = 12.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    TextButton(onClick = { viewModel.disconnect() }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFE53935))) {
+                                        Text("Disconnect", color = Color(0xFFE53935))
+                                    }
+                                }
+                            } else {
+                                var manualIp by remember { mutableStateOf("") }
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    if (discoveredServerIp.isNotBlank()) {
+                                        Text(
+                                            text = "Auto-detected: $discoveredServerIp",
+                                            color = Color(0xFF4A90D9),
+                                            fontSize = 12.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = manualIp,
+                                            onValueChange = { manualIp = it },
+                                            label = { Text("IP Address") },
+                                            placeholder = { Text("192.168.x.x") },
+                                            singleLine = true,
+                                            modifier = Modifier.width(140.dp).weight(1f),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF4A90D9),
+                                                unfocusedBorderColor = Color(0xFF3A3A4E),
+                                                focusedLabelColor = Color(0xFF4A90D9),
+                                                unfocusedLabelColor = Color(0xFF8888AA),
+                                                cursorColor = Color(0xFF4A90D9),
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White
+                                            )
+                                        )
+                                        TextButton(onClick = { if (manualIp.isNotBlank()) viewModel.connect(manualIp.trim()) }, enabled = manualIp.isNotBlank()) {
+                                            Text("Connect", color = Color(0xFF4A90D9))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     )
                 }

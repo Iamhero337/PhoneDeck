@@ -56,7 +56,7 @@ log = logging.getLogger("phonedeck")
 SYSTEM = platform.system()
 CONNECTED_CLIENTS = set()
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 PORT = 9090
 
 COMMAND_MAP = {
