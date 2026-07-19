@@ -1,64 +1,83 @@
 #!/bin/bash
-# PhoneDeck Build Script
-# Builds Android APK and Desktop binaries for all platforms
+# PhoneDeck Local Build Script
+# Run this locally to build ALL release artifacts
+# NEVER run this on GitHub Actions
 
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$ROOT_DIR/build-output"
+VERSION="1.3.0"
 DATE=$(date +"%Y%m%d-%H%M%S")
-VERSION="v1.3.0"
 
 echo "╔══════════════════════════════════════════╗"
-echo "║       PhoneDeck Build Script v$VERSION       ║"
+echo "║    PhoneDeck Local Build v$VERSION         ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
 mkdir -p "$BUILD_DIR"
 
-# Build Android APK
+# ========== Android Build ==========
 echo "[1/4] Building Android APK..."
 cd "$ROOT_DIR"
-./gradlew assembleRelease --no-daemon
-cp app/build/outputs/apk/release/app-release.apk "$BUILD_DIR/PhoneDeck-$VERSION-$DATE.apk"
-echo "✅ Android APK: $BUILD_DIR/PhoneDeck-$VERSION-$DATE.apk"
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease --no-daemon
 
-# Build Linux binary
+if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+    cp "app/build/outputs/apk/release/app-release-unsigned.apk" "$BUILD_DIR/PhoneDeck-v$VERSION-$DATE.apk"
+    echo "✅ Android: $BUILD_DIR/PhoneDeck-v$VERSION-$DATE.apk"
+else
+    echo "❌ Android build failed - APK not found"
+    exit 1
+fi
+
+# ========== Linux Build ==========
 echo ""
 echo "[2/4] Building Linux binary..."
 cd "$ROOT_DIR/companion"
 pyinstaller --clean --noconfirm phonedeck-server-linux.spec
-cp dist/phonedeck-server-linux "$BUILD_DIR/phonedeck-server-linux-$VERSION-$DATE"
-echo "✅ Linux binary: $BUILD_DIR/phonedeck-server-linux-$VERSION-$DATE"
 
-# Build Windows binary (if on Windows or using cross-compile)
+if [ -f "dist/phonedeck-server-linux" ]; then
+    cp "dist/phonedeck-server-linux" "$BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
+    chmod +x "$BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
+    echo "✅ Linux: $BUILD_DIR/phonedeck-server-linux-v$VERSION-$DATE"
+else
+    echo "⚠️  Linux binary not found (run on Linux)"
+fi
+
+# ========== Windows Build ==========
+echo ""
+echo "[3/4] Building Windows binary..."
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-    echo ""
-    echo "[3/4] Building Windows binary..."
     pyinstaller --clean --noconfirm phonedeck-server-windows.spec
-    cp dist/phonedeck-server-windows.exe "$BUILD_DIR/phonedeck-server-windows-$VERSION-$DATE.exe"
-    echo "✅ Windows binary: $BUILD_DIR/phonedeck-server-windows-$VERSION-$DATE.exe"
+    if [ -f "dist/phonedeck-server-windows.exe" ]; then
+        cp "dist/phonedeck-server-windows.exe" "$BUILD_DIR/phonedeck-server-windows-v$VERSION-$DATE.exe"
+        echo "✅ Windows: $BUILD_DIR/phonedeck-server-windows-v$VERSION-$DATE.exe"
+    fi
 else
-    echo ""
-    echo "[3/4] Skipping Windows build (run on Windows or use GitHub Actions)"
+    echo "⏭️  Skipping Windows (run on Windows): pyinstaller --clean phonedeck-server-windows.spec"
 fi
 
-# Build macOS binary (if on macOS)
+# ========== macOS Build ==========
+echo ""
+echo "[4/4] Building macOS binary..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo ""
-    echo "[4/4] Building macOS binary..."
     pyinstaller --clean --noconfirm --onefile server.py --name phonedeck-server-macos
-    cp dist/phonedeck-server-macos "$BUILD_DIR/phonedeck-server-macos-$VERSION-$DATE"
-    echo "✅ macOS binary: $BUILD_DIR/phonedeck-server-macos-$VERSION-$DATE"
+    if [ -f "dist/phonedeck-server-macos" ]; then
+        cp "dist/phonedeck-server-macos" "$BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
+        chmod +x "$BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
+        echo "✅ macOS: $BUILD_DIR/phonedeck-server-macos-v$VERSION-$DATE"
+    fi
 else
-    echo ""
-    echo "[4/4] Skipping macOS build (run on macOS or use GitHub Actions)"
+    echo "⏭️  Skipping macOS (run on macOS): pyinstaller --clean --onefile server.py --name phonedeck-server-macos"
 fi
 
+# ========== Summary ==========
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║           Build Complete!               ║"
+echo "║           Build Complete!              ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "Output directory: $BUILD_DIR"
 ls -la "$BUILD_DIR"
+echo ""
+echo "📦 Upload these to GitHub Release manually:"
+echo "   https://github.com/iamhero337/PhoneDeck/releases/new"

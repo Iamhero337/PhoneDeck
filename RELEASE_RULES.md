@@ -1,122 +1,68 @@
-# Release & Version Management Rules
+# Release Rules - PhoneDeck
 
-## Version Bumping (MANDATORY before every release)
+## ⛔ NEVER Build on GitHub Actions
 
-### 1. Update ALL version references in a single commit:
+**ALL builds MUST be done locally.** Do not use GitHub Actions for building release artifacts.
 
-**Android (app/build.gradle.kts):**
-```kotlin
-defaultConfig {
-    versionCode = X        // Increment by 1
-    versionName = "X.Y.Z"  // Semantic version
-}
-```
-
-**Python Server (companion/server.py):**
-```python
-VERSION = "X.Y.Z"
-```
-
-**Updater (companion/updater.py):**
-```python
-CURRENT_VERSION = "vX.Y.Z"
-```
-
-**MainActivity (app/src/main/java/.../MainActivity.kt):**
-```kotlin
-const val CURRENT_VERSION = "vX.Y.Z"
-```
-
-### 2. Build Locally FIRST
+### Required Local Build Process
 
 ```bash
-# Android
-JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew :app:assembleRelease --no-daemon
+# 1. Build Android APK (requires Android Studio/JDK 21)
+cd Androiddeck
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease
 
-# Linux Server
-cd companion && pyinstaller --clean --noconfirm phonedeck-server-linux.spec
+# 2. Build Linux binary
+cd companion
+pyinstaller --clean --noconfirm phonedeck-server-linux.spec
+
+# 3. Build Windows binary (on Windows machine or via Wine)
+pyinstaller --clean --noconfirm phonedeck-server-windows.spec
+
+# 4. Build macOS binary (on macOS)
+pyinstaller --clean --noconfirm --onefile server.py --name phonedeck-server-macos
 ```
 
-### 3. Verify Builds Work
+### Release Checklist
 
-```bash
-# Test APK installs
-adb install -r app/build/outputs/apk/release/app-release.apk
+1. **Version bump** in:
+   - `app/build.gradle.kts` (versionCode, versionName)
+   - `companion/server.py` (VERSION)
+   - `companion/updater.py` (CURRENT_VERSION)
+   - `MainActivity.kt` (CURRENT_VERSION)
 
-# Test Linux binary runs
-./companion/dist/phonedeck-server-linux --version
-```
+2. **Build locally** all artifacts:
+   - `app/build/outputs/apk/release/app-release-unsigned.apk`
+   - `companion/dist/phonedeck-server-linux`
+   - `companion/dist/phonedeck-server-windows.exe`
+   - `companion/dist/phonedeck-server-macos`
 
-### 4. Copy to downloads/ (NOT COMMITTED)
-
-```bash
-# Remove OLD versions first
-rm -f downloads/PhoneDeck-*.apk
-rm -f downloads/phonedeck-server-linux-*
-
-# Copy NEW versions
-cp app/build/outputs/apk/release/app-release.apk downloads/PhoneDeck-vX.Y.Z.apk
-cp companion/dist/phonedeck-server-linux downloads/phonedeck-server-linux-vX.Y.Z
-```
-
-### 5. Create Git Tag & GitHub Release
-
-```bash
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-**GitHub Actions will auto-build and attach artifacts to the release.**
-
-### 6. Update CHANGELOG.md
-
-Follow [Keep a Changelog](https://keepachangelog.com/) format.
-
----
-
-## Auto-Connect Troubleshooting
-
-If "Auto-connect is ON" but not connecting:
-
-1. **Check server is running on desktop:**
+3. **Commit & tag**:
    ```bash
-   systemctl --user status phonedeck.service
-   # or
-   journalctl --user -u phonedeck.service -f
+   git add -A
+   git commit -m "vX.Y.Z: Release notes"
+   git tag vX.Y.Z
+   git push origin master
+   git push origin vX.Y.Z
    ```
 
-2. **Verify same WiFi network** (phone + desktop)
+4. **Manual GitHub Release**:
+   - Go to https://github.com/iamhero337/PhoneDeck/releases/new
+   - Tag: `vX.Y.Z`
+   - Title: `PhoneDeck vX.Y.Z`
+   - Upload ALL artifacts manually
+   - Publish
 
-3. **Check mDNS/zeroconf works:**
-   ```bash
-   # On desktop, verify service is broadcasting:
-   avahi-browse -a | grep phonedeck
-   # Or check logs for "Registered service"
-   ```
+### Why Local Builds?
 
-4. **Manual IP fallback:** Open Settings → Connect → enter desktop IP manually
+- ✅ Reproducible environment
+- ✅ No CI/CD flakiness
+- ✅ Faster iteration
+- ✅ Full control over signing/keys
+- ✅ No secrets in CI
+- ✅ Works offline
 
-5. **Firewall:** Ensure port 9090 allowed on desktop:
-   ```bash
-   sudo ufw allow 9090/tcp
-   ```
+### Workflow Files
 
----
+**DELETED** - `.github/workflows/android.yml` and `.github/workflows/desktop.yml` removed per this rule.
 
-## Git Ignore (enforced)
-
-`downloads/` is in `.gitignore` — never commit built artifacts.
-
----
-
-## Checklist Before Pushing Release
-
-- [ ] All version numbers match across 5 files
-- [ ] `./gradlew assembleRelease` succeeds
-- [ ] `pyinstaller` builds Linux binary
-- [ ] Both artifacts tested locally
-- [ ] Old downloads/ files removed
-- [ ] New artifacts copied to downloads/
-- [ ] CHANGELOG.md updated
-- [ ] Git tag created and pushed
-- [ ] GitHub Release published (auto or manual)
+If workflows are re-added, they MUST be for testing/linting ONLY - never for producing release artifacts.
