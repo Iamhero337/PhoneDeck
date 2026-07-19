@@ -17,6 +17,7 @@ import shutil
 import sys
 import time
 import uuid
+import webbrowser
 
 import updater
 
@@ -55,6 +56,35 @@ log = logging.getLogger("phonedeck")
 SYSTEM = platform.system()
 CONNECTED_CLIENTS = set()
 
+VERSION = "1.3.0"
+PORT = 9090
+
+COMMAND_MAP = {
+    "code": "Visual Studio Code",
+    "terminal": "Terminal",
+    "browser": "Web Browser",
+    "spotify": "Spotify",
+    "figma": "Figma",
+    "photoshop": "Photoshop",
+    "illustrator": "Illustrator",
+    "preview": "Preview",
+    "screenshot": "Screenshot",
+    "lock": "Lock Screen",
+    "sleep": "Sleep",
+    "restart": "Restart",
+    "shutdown": "Shutdown",
+    "logout": "Logout",
+    "hibernate": "Hibernate",
+    "volume_up": "Volume Up",
+    "volume_down": "Volume Down",
+    "mute": "Toggle Mute",
+    "play_pause": "Play/Pause",
+    "next": "Next Track",
+    "prev": "Previous Track",
+    "brightness_up": "Brightness Up",
+    "brightness_down": "Brightness Down",
+}
+
 
 def _check_tool(name: str) -> bool:
     return shutil.which(name) is not None
@@ -68,67 +98,50 @@ async def broadcast(message: str):
         )
 
 
+def _run_async(cmd: list, shell: bool = False) -> dict:
+    try:
+        subprocess.Popen(cmd, shell=shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+def _run_sync(cmd: list, shell: bool = False) -> dict:
+    try:
+        subprocess.run(cmd, shell=shell, capture_output=True, check=True)
+        return {"status": "ok"}
+    except subprocess.CalledProcessError as e:
+        return {"status": "error", "message": e.stderr.decode().strip() if e.stderr else str(e)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 def execute_command(command: str) -> dict:
     log.info(f"Executing: {command}")
 
     if command.startswith("open_url:"):
         url = command.split("open_url:", 1)[1].strip()
-        import webbrowser
         webbrowser.open(url)
         return {"status": "ok", "command": command}
 
     if command in ("restart", "reboot"):
-        if SYSTEM == "Linux":
-            subprocess.Popen(["systemctl", "reboot"])
-        elif SYSTEM == "Darwin":
-            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to restart'])
-        elif SYSTEM == "Windows":
-            subprocess.Popen(["shutdown", "/r", "/t", "0"])
-        return {"status": "ok", "command": command}
+        return _handle_power("restart")
 
     if command == "shutdown":
-        if SYSTEM == "Linux":
-            subprocess.Popen(["systemctl", "poweroff"])
-        elif SYSTEM == "Darwin":
-            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to shut down'])
-        elif SYSTEM == "Windows":
-            subprocess.Popen(["shutdown", "/s", "/t", "0"])
-        return {"status": "ok", "command": command}
+        return _handle_power("shutdown")
 
     if command == "logout":
-        if SYSTEM == "Linux":
-            subprocess.Popen(["loginctl", "terminate-user", os.environ.get("USER", "")])
-        elif SYSTEM == "Darwin":
-            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to log out'])
-        elif SYSTEM == "Windows":
-            subprocess.Popen(["shutdown", "/l"])
-        return {"status": "ok", "command": command}
+        return _handle_power("logout")
 
     if command == "hibernate":
-        if SYSTEM == "Linux":
-            subprocess.Popen(["systemctl", "hibernate"])
-        elif SYSTEM == "Darwin":
-            subprocess.Popen(["osascript", "-e", 'tell app "System Events" to sleep'])
-        elif SYSTEM == "Windows":
-            subprocess.Popen(["shutdown", "/h"])
-        return {"status": "ok", "command": command}
+        return _handle_power("hibernate")
 
     if command == "browser":
-        import webbrowser
         webbrowser.open("https://google.com")
         return {"status": "ok", "command": command}
 
     if command == "spotify":
-        if SYSTEM == "Darwin" and os.path.exists("/Applications/Spotify.app"):
-            subprocess.run(["open", "-a", "Spotify"])
-        elif SYSTEM == "Linux" and _check_tool("spotify"):
-            subprocess.Popen(["spotify"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif SYSTEM == "Windows" and _check_tool("spotify"):
-            subprocess.Popen(["start", "spotify"], shell=True)
-        else:
-            import webbrowser
-            webbrowser.open("https://open.spotify.com")
-        return {"status": "ok", "command": command}
+        return _launch_spotify()
 
     if command == "get_system_info":
         info = {
@@ -147,7 +160,47 @@ def execute_command(command: str) -> dict:
             return _windows_command(command)
         return {"status": "error", "message": f"Unsupported OS: {SYSTEM}"}
     except Exception as e:
+        log.error(f"Command execution error: {e}")
         return {"status": "error", "message": str(e)}
+
+
+def _handle_power(action: str) -> dict:
+    if SYSTEM == "Linux":
+        cmds = {
+            "restart": ["systemctl", "reboot"],
+            "shutdown": ["systemctl", "poweroff"],
+            "logout": ["loginctl", "terminate-user", os.environ.get("USER", "")],
+            "hibernate": ["systemctl", "hibernate"],
+        }
+        return _run_async(cmds.get(action, []))
+    elif SYSTEM == "Darwin":
+        scripts = {
+            "restart": 'tell app "System Events" to restart',
+            "shutdown": 'tell app "System Events" to shut down',
+            "logout": 'tell app "System Events" to log out',
+            "hibernate": 'tell app "System Events" to sleep',
+        }
+        return _run_async(["osascript", "-e", scripts.get(action, "")])
+    elif SYSTEM == "Windows":
+        cmds = {
+            "restart": ["shutdown", "/r", "/t", "0"],
+            "shutdown": ["shutdown", "/s", "/t", "0"],
+            "logout": ["shutdown", "/l"],
+            "hibernate": ["shutdown", "/h"],
+        }
+        return _run_async(cmds.get(action, []))
+    return {"status": "error", "message": f"Power action not supported on {SYSTEM}"}
+
+
+def _launch_spotify() -> dict:
+    if SYSTEM == "Darwin" and os.path.exists("/Applications/Spotify.app"):
+        return _run_async(["open", "-a", "Spotify"])
+    elif SYSTEM == "Linux" and _check_tool("spotify"):
+        return _run_async(["spotify"])
+    elif SYSTEM == "Windows" and _check_tool("spotify"):
+        return _run_async(["start", "spotify"], shell=True)
+    webbrowser.open("https://open.spotify.com")
+    return {"status": "ok", "command": "spotify"}
 
 
 def _get_uptime() -> str:
@@ -182,13 +235,14 @@ def _macos_command(command: str) -> dict:
             "play_pause": 'tell application "System Events" to key code 16',
             "next": 'tell application "System Events" to key code 17',
             "prev": 'tell application "System Events" to key code 18',
+            "brightness_up": 'tell application "System Events" to key code 144',
+            "brightness_down": 'tell application "System Events" to key code 145',
         }
         script = cmds.get(command)
         if script:
             applescript.AppleScript(script).run()
             return {"status": "ok", "command": command}
-        subprocess.run(["open", "-a", command], capture_output=True)
-        return {"status": "ok", "command": command}
+        return _run_async(["open", "-a", command])
     except ImportError:
         return {"status": "error", "message": "pip3 install applescript on macOS"}
 
@@ -204,28 +258,13 @@ def _linux_command(command: str) -> dict:
         "screenshot": _screenshot_cmd(),
         "lock": _lock_cmd(),
         "sleep": _sleep_cmd(),
-        "volume_up": None,
-        "volume_down": None,
-        "mute": None,
-        "play_pause": None,
-        "next": None,
-        "prev": None,
-        "brightness_up": None,
-        "brightness_down": None,
     }
 
-    if command == "volume_up":
-        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"])
-        return {"status": "ok", "command": command}
-    if command == "volume_down":
-        subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"])
-        return {"status": "ok", "command": command}
-    if command == "mute":
-        subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-        return {"status": "ok", "command": command}
+    if command in ("volume_up", "volume_down", "mute"):
+        return _linux_volume(command)
 
     if command in ("play_pause", "next", "prev"):
-        return _linux_media_playback(command)
+        return _linux_media(command)
 
     if command in ("brightness_up", "brightness_down"):
         return _linux_brightness(command)
@@ -234,17 +273,15 @@ def _linux_command(command: str) -> dict:
         return _linux_screenshot()
 
     if command == "lock":
-        subprocess.run(["loginctl", "lock-session"])
-        return {"status": "ok", "command": command}
+        return _run_sync(["loginctl", "lock-session"])
+
     if command == "sleep":
-        subprocess.run(["systemctl", "suspend"])
-        return {"status": "ok", "command": command}
+        return _run_async(["systemctl", "suspend"])
 
     app = app_map.get(command, command)
     if app is None:
         return {"status": "error", "message": f"No mapping for: {command}"}
-    subprocess.Popen([app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return {"status": "ok", "command": command}
+    return _run_async([app])
 
 
 def _find_terminal() -> str:
@@ -274,44 +311,39 @@ def _sleep_cmd() -> str:
     return "systemctl"
 
 
-def _linux_media_playback(command: str) -> dict:
-    key_map = {
-        "play_pause": "XF86AudioPlay",
-        "next": "XF86AudioNext",
-        "prev": "XF86AudioPrev",
+def _linux_volume(command: str) -> dict:
+    actions = {
+        "volume_up": ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"],
+        "volume_down": ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"],
+        "mute": ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
     }
+    return _run_sync(actions[command])
+
+
+def _linux_media(command: str) -> dict:
+    key_map = {"play_pause": "XF86AudioPlay", "next": "XF86AudioNext", "prev": "XF86AudioPrev"}
+    action_map = {"play_pause": "play-pause", "next": "next", "prev": "previous"}
     key = key_map.get(command)
+    action = action_map.get(command)
 
     if _check_tool("playerctl"):
-        action = {"play_pause": "play-pause", "next": "next", "prev": "previous"}[command]
-        subprocess.run(["playerctl", action], capture_output=True)
-        return {"status": "ok", "command": command}
-
+        return _run_sync(["playerctl", action])
     if _check_tool("ydotool"):
-        subprocess.run(["ydotool", "key", key], capture_output=True)
-        return {"status": "ok", "command": command}
-
+        return _run_sync(["ydotool", "key", key])
     if _check_tool("wtype"):
-        subprocess.run(["wtype", "-k", key], capture_output=True)
-        return {"status": "ok", "command": command}
-
+        return _run_sync(["wtype", "-k", key])
     if _check_tool("xdotool"):
-        subprocess.run(["xdotool", "key", key], capture_output=True)
-        return {"status": "ok", "command": command}
-
+        return _run_sync(["xdotool", "key", key])
     return {"status": "error", "message": "No media key tool found (install playerctl or wtype)"}
 
 
 def _linux_brightness(command: str) -> dict:
     if _check_tool("brightnessctl"):
         arg = "5%+" if "up" in command else "5%-"
-        subprocess.run(["brightnessctl", "s", arg])
-        return {"status": "ok", "command": command}
-
+        return _run_sync(["brightnessctl", "s", arg])
     if _check_tool("xbacklight"):
         arg = "+5" if "up" in command else "-5"
-        subprocess.run(["xbacklight", arg])
-        return {"status": "ok", "command": command}
+        return _run_sync(["xbacklight", arg])
 
     backlight_dirs = glob.glob("/sys/class/backlight/*")
     if not backlight_dirs:
@@ -337,21 +369,18 @@ def _linux_screenshot() -> dict:
     os.makedirs(path, exist_ok=True)
     filename = os.path.join(path, f"screenshot-{int(time.time())}.png")
 
-    if _check_tool("spectacle"):
-        subprocess.Popen(["spectacle", "-b", "-n", "-o", filename])
-        return {"status": "ok"}
-    if _check_tool("gnome-screenshot"):
-        subprocess.Popen(["gnome-screenshot", "-f", filename])
-        return {"status": "ok"}
-    if _check_tool("grim"):
-        subprocess.Popen(["grim", filename])
-        return {"status": "ok"}
-    if _check_tool("scrot"):
-        subprocess.Popen(["scrot", filename])
-        return {"status": "ok"}
-    if _check_tool("import"):
-        subprocess.Popen(["import", "-window", "root", filename])
-        return {"status": "ok"}
+    tools = [
+        (["spectacle", "-b", "-n", "-o", filename], "spectacle"),
+        (["gnome-screenshot", "-f", filename], "gnome-screenshot"),
+        (["grim", filename], "grim"),
+        (["scrot", filename], "scrot"),
+        (["import", "-window", "root", filename], "import"),
+    ]
+
+    for cmd, tool in tools:
+        if _check_tool(tool):
+            subprocess.Popen(cmd)
+            return {"status": "ok"}
 
     return {"status": "error", "message": "No screenshot tool (install spectacle, grim, scrot, or gnome-screenshot)"}
 
@@ -365,24 +394,55 @@ def _windows_command(command: str) -> dict:
     }
 
     if command in ("volume_up", "volume_down", "mute", "play_pause", "next", "prev"):
-        try:
-            import win32api
-            import win32con
-            vk = {"volume_up": 0xAF, "volume_down": 0xAE, "mute": 0xAD,
-                  "play_pause": 0xB3, "next": 0xB0, "prev": 0xB1}[command]
-            win32api.keybd_event(vk, 0, 0, 0)
-            win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
-        except ImportError:
-            return {"status": "error", "message": "pip3 install pywin32 on Windows"}
-        return {"status": "ok", "command": command}
+        return _windows_media(command)
 
     if command == "lock":
         subprocess.Popen(["rundll32.exe", "user32.dll,LockWorkStation"])
         return {"status": "ok", "command": command}
 
+    if command == "sleep":
+        subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
+        return {"status": "ok", "command": command}
+
+    if command in ("brightness_up", "brightness_down"):
+        return _windows_brightness(command)
+
     app = app_map.get(command, command)
     subprocess.Popen(["start", app], shell=True)
     return {"status": "ok", "command": command}
+
+
+def _windows_media(command: str) -> dict:
+    try:
+        import win32api
+        import win32con
+        vk_map = {
+            "volume_up": 0xAF, "volume_down": 0xAE, "mute": 0xAD,
+            "play_pause": 0xB3, "next": 0xB0, "prev": 0xB1,
+        }
+        vk = vk_map[command]
+        win32api.keybd_event(vk, 0, 0, 0)
+        win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+        return {"status": "ok", "command": command}
+    except ImportError:
+        return {"status": "error", "message": "pip3 install pywin32 on Windows"}
+
+
+def _windows_brightness(command: str) -> dict:
+    try:
+        import wmi
+        w = wmi.WMI(namespace='wmi')
+        for monitor in w.WmiMonitorBrightnessMethods():
+            current = monitor.WmiMonitorBrightness()[0].CurrentBrightness
+            step = 10
+            new_val = current + step if "up" in command else current - step
+            new_val = max(0, min(100, new_val))
+            monitor.WmiSetBrightness(new_val, 0)
+            return {"status": "ok", "command": command}
+    except ImportError:
+        return {"status": "error", "message": "pip3 install wmi on Windows"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 async def handler(websocket):
@@ -398,6 +458,7 @@ async def handler(websocket):
             except (json.JSONDecodeError, TypeError):
                 command = message.strip()
             result = execute_command(command)
+            result["command"] = command
             await websocket.send(json.dumps(result))
     except websockets.exceptions.ConnectionClosed:
         pass
@@ -406,7 +467,7 @@ async def handler(websocket):
         log.info(f"Client disconnected: {addr}")
 
 
-def get_best_local_ip():
+def get_best_local_ip() -> str:
     try:
         best_ip = None
         for adapter in ifaddr.get_adapters():
@@ -436,7 +497,7 @@ async def heartbeat():
             dead = set()
             for ws in CONNECTED_CLIENTS:
                 try:
-                    pong = await asyncio.wait_for(ws.ping(), timeout=5)
+                    await asyncio.wait_for(ws.ping(), timeout=5)
                 except Exception:
                     dead.add(ws)
             for ws in dead:
@@ -448,8 +509,7 @@ async def main():
         asyncio.create_task(asyncio.to_thread(updater.check_for_updates))
 
     host = "0.0.0.0"
-    port = 9090
-
+    port = PORT
     local_ip = get_best_local_ip()
 
     print("\033[36m")
@@ -460,7 +520,7 @@ async def main():
     print("/_/   /_/ /_/\\____/_/ /_/\\___/_____/\\___/\\___/_/|_| \033[0m")
     print()
     print("  \033[1;35mBuilt with \u2764 by @iamhero337\033[0m")
-    print("  \033[1;33mVersion: \033[0m\033[1;97m{}\033[0m".format(updater.CURRENT_VERSION))
+    print("  \033[1;33mVersion: \033[0m\033[1;97m{}\033[0m".format(VERSION))
     print("  \033[1;33mOS: \033[0m\033[1;97m{}\033[0m".format(SYSTEM))
     print("  \033[1;33mHostname: \033[0m\033[1;97m{}\033[0m".format(socket.gethostname()))
     print("  \033[1;33mAuto-connect IP: \033[0m\033[1;97m{}\033[0m".format(local_ip))
@@ -482,7 +542,7 @@ async def main():
         f"PhoneDeck Desktop ({hostname}-{unique_id})._phonedeck._tcp.local.",
         addresses=[socket.inet_aton(local_ip)],
         port=port,
-        properties={},
+        properties={"version": VERSION.encode()},
         server=f"{hostname}.local."
     )
 
@@ -515,7 +575,6 @@ def auto_install_linux_service():
         return
 
     current_exe = os.path.abspath(sys.argv[0])
-
     target_bin = os.path.expanduser("~/.local/bin/phonedeck-server")
 
     if current_exe == target_bin:
@@ -565,8 +624,7 @@ WantedBy=default.target
         f.write(service_content)
 
     try:
-        subprocess.run(["loginctl", "enable-linger", os.environ.get("USER", "")],
-                       capture_output=True)
+        subprocess.run(["loginctl", "enable-linger", os.environ.get("USER", "")], capture_output=True)
         subprocess.check_call(["systemctl", "--user", "daemon-reload"])
         subprocess.check_call(["systemctl", "--user", "enable", "--now", "phonedeck.service"])
         print("\n✅ Successfully installed and started in the background!")
@@ -581,6 +639,10 @@ WantedBy=default.target
 if __name__ == "__main__":
     if "--install" in sys.argv:
         auto_install_linux_service()
+        sys.exit(0)
+
+    if "--version" in sys.argv:
+        print(VERSION)
         sys.exit(0)
 
     auto_install_linux_service()

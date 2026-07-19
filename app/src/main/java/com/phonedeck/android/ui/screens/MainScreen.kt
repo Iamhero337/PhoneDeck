@@ -32,12 +32,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
     var showConnectDialog by remember { mutableStateOf(false) }
     var serverIp by remember { mutableStateOf("") }
-
-    LaunchedEffect(discoveredServerIp) {
-        if (discoveredServerIp.isNotBlank() && serverIp.isBlank()) {
-            serverIp = discoveredServerIp
-        }
-    }
+    var showSettings by remember { mutableStateOf(false) }
 
     var showAddSiteDialog by remember { mutableStateOf(false) }
     var newSiteName by remember { mutableStateOf("") }
@@ -86,22 +81,12 @@ fun MainScreen(viewModel: MainViewModel) {
                             )
                         }
                     }
-                    if (!connected) {
-                        IconButton(onClick = { showConnectDialog = true }) {
-                            Icon(
-                                Icons.Default.CastConnected,
-                                contentDescription = "Connect",
-                                tint = Color(0xFF4A90D9)
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = { showConnectDialog = true }) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = Color(0xFF8888AA)
-                            )
-                        }
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = if (connected) Color(0xFF4A90D9) else Color(0xFF8888AA)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -154,7 +139,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "Tap the connect icon to connect",
+                                    "Tap the settings icon to connect manually",
                                     color = Color(0xFF555566),
                                     fontSize = 13.sp
                                 )
@@ -177,114 +162,81 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     if (showConnectDialog) {
-        AlertDialog(
-            onDismissRequest = { showConnectDialog = false },
-            title = {
-                Text(
-                    if (connected) "Connected" else "Connect to Desktop",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column {
-                    if (connected) {
-                        Text("Connected to server at $connectionStatus")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Host: $discoveredServerIp",
-                            color = Color(0xFF8888AA),
-                            fontSize = 13.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        TextButton(onClick = {
-                            viewModel.disconnect()
-                            serverIp = ""
-                            showConnectDialog = false
-                        }) {
-                            Text("Disconnect", color = Color(0xFFE53935))
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = serverIp,
-                            onValueChange = { serverIp = it },
-                            label = { Text("Server IP") },
-                            placeholder = { Text("e.g. 192.168.1.100") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF4A90D9),
-                                unfocusedBorderColor = Color(0xFF3A3A4E),
-                                focusedLabelColor = Color(0xFF4A90D9),
-                                unfocusedLabelColor = Color(0xFF8888AA),
-                                cursorColor = Color(0xFF4A90D9),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (discoveredServerIp.isNotBlank() && serverIp == discoveredServerIp) {
-                            Text(
-                                "\u2705 Laptop auto-detected! Click connect.",
-                                color = Color(0xFF4CAF50),
-                                fontSize = 13.sp
-                            )
-                        } else if (discoveredServerIp.isNotBlank()) {
-                            Text(
-                                "Found server at: $discoveredServerIp",
-                                color = Color(0xFF4A90D9),
-                                fontSize = 13.sp
-                            )
-                        } else {
-                            Text(
-                                "Searching for laptop on WiFi...",
-                                color = Color(0xFF8888AA),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
+        ConnectDialog(
+            onDismiss = { showConnectDialog = false },
+            connected = connected,
+            connectionStatus = connectionStatus,
+            discoveredServerIp = discoveredServerIp,
+            serverIp = serverIp,
+            onServerIpChange = { serverIp = it },
+            onConnect = {
+                if (serverIp.isNotBlank()) {
+                    viewModel.connect(serverIp.trim())
+                    showConnectDialog = false
                 }
             },
-            confirmButton = {
-                if (!connected) {
-                    TextButton(
-                        onClick = {
-                            if (serverIp.isNotBlank()) {
-                                viewModel.connect(serverIp.trim())
-                                showConnectDialog = false
-                            }
-                        },
-                        enabled = serverIp.isNotBlank()
-                    ) {
-                        Text("Connect", color = Color(0xFF4A90D9))
-                    }
-                } else {
-                    TextButton(onClick = { showConnectDialog = false }) {
-                        Text("Close")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConnectDialog = false }) {
-                    Text("Cancel", color = Color(0xFF8888AA))
-                }
-            },
-            containerColor = Color(0xFF1A1A2E),
-            titleContentColor = Color.White,
-            textContentColor = Color.White
+            onDisconnect = {
+                viewModel.disconnect()
+                serverIp = ""
+                showConnectDialog = false
+            }
         )
     }
 
     if (showAddSiteDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddSiteDialog = false },
-            title = { Text("Add Top Site", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
+        AddSiteDialog(
+            onDismiss = { showAddSiteDialog = false; newSiteName = ""; newSiteUrl = "" },
+            name = newSiteName,
+            onNameChange = { newSiteName = it },
+            url = newSiteUrl,
+            onUrlChange = { newSiteUrl = it },
+            onAdd = {
+                if (newSiteName.isNotBlank() && newSiteUrl.isNotBlank()) {
+                    viewModel.addTopSite(newSiteName.trim(), newSiteUrl.trim())
+                    newSiteName = ""
+                    newSiteUrl = ""
+                    showAddSiteDialog = false
+                }
+            }
+        )
+    }
+
+    if (showSettings) {
+        SettingsScreen(
+            viewModel = viewModel,
+            onBack = { showSettings = false }
+        )
+    }
+}
+
+@Composable
+fun ConnectDialog(
+    onDismiss: () -> Unit,
+    connected: Boolean,
+    connectionStatus: String,
+    discoveredServerIp: String,
+    serverIp: String,
+    onServerIpChange: (String) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (connected) "Connected" else "Connect to Desktop", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                if (connected) {
+                    Text("Connected to server at $connectionStatus")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Host: $discoveredServerIp", color = Color(0xFF8888AA), fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextButton(onClick = onDisconnect) { Text("Disconnect", color = Color(0xFFE53935)) }
+                } else {
                     OutlinedTextField(
-                        value = newSiteName,
-                        onValueChange = { newSiteName = it },
-                        label = { Text("Site Name") },
-                        placeholder = { Text("e.g. YouTube") },
+                        value = serverIp,
+                        onValueChange = onServerIpChange,
+                        label = { Text("Server IP") },
+                        placeholder = { Text("e.g. 192.168.1.100") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -298,48 +250,85 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = newSiteUrl,
-                        onValueChange = { newSiteUrl = it },
-                        label = { Text("URL") },
-                        placeholder = { Text("e.g. youtube.com") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF4A90D9),
-                            unfocusedBorderColor = Color(0xFF3A3A4E),
-                            focusedLabelColor = Color(0xFF4A90D9),
-                            unfocusedLabelColor = Color(0xFF8888AA),
-                            cursorColor = Color(0xFF4A90D9),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
+                    if (discoveredServerIp.isNotBlank() && serverIp == discoveredServerIp) {
+                        Text("\u2705 Laptop auto-detected! Click connect.", color = Color(0xFF4CAF50), fontSize = 13.sp)
+                    } else if (discoveredServerIp.isNotBlank()) {
+                        Text("Found server at: $discoveredServerIp", color = Color(0xFF4A90D9), fontSize = 13.sp)
+                    } else {
+                        Text("Searching for laptop on WiFi...", color = Color(0xFF8888AA), fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!connected) {
+                TextButton(onClick = onConnect, enabled = serverIp.isNotBlank()) {
+                    Text("Connect", color = Color(0xFF4A90D9))
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFF8888AA)) } },
+        containerColor = Color(0xFF1A1A2E),
+        titleContentColor = Color.White,
+        textContentColor = Color.White
+    )
+}
+
+@Composable
+fun AddSiteDialog(
+    onDismiss: () -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    url: String,
+    onUrlChange: (String) -> Unit,
+    onAdd: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Top Site", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    label = { Text("Site Name") },
+                    placeholder = { Text("e.g. YouTube") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4A90D9),
+                        unfocusedBorderColor = Color(0xFF3A3A4E),
+                        focusedLabelColor = Color(0xFF4A90D9),
+                        unfocusedLabelColor = Color(0xFF8888AA),
+                        cursorColor = Color(0xFF4A90D9),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newSiteName.isNotBlank() && newSiteUrl.isNotBlank()) {
-                            viewModel.addTopSite(newSiteName.trim(), newSiteUrl.trim())
-                            newSiteName = ""
-                            newSiteUrl = ""
-                            showAddSiteDialog = false
-                        }
-                    },
-                    enabled = newSiteName.isNotBlank() && newSiteUrl.isNotBlank()
-                ) {
-                    Text("Add", color = Color(0xFF4A90D9))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddSiteDialog = false }) {
-                    Text("Cancel", color = Color(0xFF8888AA))
-                }
-            },
-            containerColor = Color(0xFF1A1A2E),
-            titleContentColor = Color.White,
-            textContentColor = Color.White
-        )
-    }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = onUrlChange,
+                    label = { Text("URL") },
+                    placeholder = { Text("e.g. youtube.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4A90D9),
+                        unfocusedBorderColor = Color(0xFF3A3A4E),
+                        focusedLabelColor = Color(0xFF4A90D9),
+                        unfocusedLabelColor = Color(0xFF8888AA),
+                        cursorColor = Color(0xFF4A90D9),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onAdd, enabled = name.isNotBlank() && url.isNotBlank()) { Text("Add", color = Color(0xFF4A90D9)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Color(0xFF8888AA)) } },
+        containerColor = Color(0xFF1A1A2E),
+        titleContentColor = Color.White,
+        textContentColor = Color.White
+    )
 }

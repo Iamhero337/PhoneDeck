@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
 
-const val CURRENT_VERSION = "v1.2.0"
+const val CURRENT_VERSION = "v1.3.0"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val viewModel: MainViewModel = viewModel()
                     MainScreen(viewModel = viewModel)
-                    UpdateChecker(this)
+                    UpdateChecker(this@MainActivity)
                 }
             }
         }
@@ -54,7 +54,7 @@ fun UpdateChecker(activity: ComponentActivity) {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             try {
-                val url = URL("https://api.github.com/repos/Iamhero337/PhoneDeck/releases/latest")
+                val url = URL("https://api.github.com/repos/iamhero337/PhoneDeck/releases/latest")
                 val connection = url.openConnection()
                 connection.setRequestProperty("User-Agent", "Mozilla/5.0")
                 val response = connection.getInputStream().bufferedReader().use { it.readText() }
@@ -81,14 +81,10 @@ fun UpdateChecker(activity: ComponentActivity) {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(latestUrl.value))
                     activity.startActivity(intent)
                     showDialog.value = false
-                }) {
-                    Text("Update")
-                }
+                }) { Text("Update") }
             },
             dismissButton = {
-                Button(onClick = { showDialog.value = false }) {
-                    Text("Later")
-                }
+                Button(onClick = { showDialog.value = false }) { Text("Later") }
             }
         )
     }

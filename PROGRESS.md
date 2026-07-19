@@ -11,10 +11,65 @@ This document tracks our recent fixes, improvements, and the current working sta
 - **Cross-Platform Foundation:** The Python server runs effectively on Windows, macOS, and Linux, with proper daemonization/systemd background support on Linux and Windows.
 - **Dynamic Top Sites:** Users can add websites dynamically in the Android app and have them immediately saved and mapped to the desktop's default browser.
 - **PC Power Control:** Restart, shutdown, logout, sleep, and hibernate your computer remotely.
+- **Custom Pages & Tiles:** Full UI for creating, editing, reordering, and deleting custom pages and tiles.
+- **Import/Export Configuration:** Backup and restore entire layout as JSON.
+- **Haptic Feedback:** Optional vibration on tile press.
+- **Settings Screen:** Comprehensive settings for connection, feedback, pages, backup, and about.
 
-## What's New in v1.2.0
+## What's New in v1.3.0
 
-### Critical Bug Fixes
+### Major Features
+
+1. **Complete Settings Screen:**
+   - Connection settings (auto-connect, server port)
+   - Feedback settings (haptic feedback toggle)
+   - Page management (add custom pages, reset to defaults)
+   - Backup & Restore (export/import JSON configuration)
+   - About section with GitHub link
+
+2. **Full Customization System:**
+   - Add unlimited custom pages with custom names
+   - Add/edit/delete tiles on any custom page
+   - Per-tile customization: label, icon, command, background color, icon color
+   - Drag-to-reorder pages (in settings)
+   - Long-press tiles for context menu (edit/delete)
+
+3. **Configuration Persistence:**
+   - All custom pages and tiles saved to SharedPreferences
+   - Top Sites persisted separately
+   - Default pages protected from deletion
+   - JSON export/import for sharing layouts
+
+4. **Enhanced Python Server:**
+   - Modular command handling with clear OS separation
+   - Added brightness control for Windows (via WMI)
+   - Added sleep command for Windows
+   - Improved screenshot detection (spectacle, grim, scrot, gnome-screenshot, import)
+   - Better error messages for missing dependencies
+   - Version flag (`--version`) for CI/CD
+   - Cleaner shutdown handling
+
+5. **Build System & CI/CD:**
+   - GitHub Actions workflow for multi-platform builds (Linux, Windows, macOS)
+   - Automated release asset uploads
+   - Unified build script (`build.sh`)
+   - Updated PyInstaller specs with all hidden imports
+
+6. **Installation Scripts:**
+   - Linux: `install_linux.sh` (systemd user service with linger)
+   - macOS: `install_macos.sh` (LaunchAgent)
+   - Windows: `install_windows.bat` (Startup shortcut + dependency install)
+
+7. **UI/UX Improvements:**
+   - Material 3 design with consistent theming
+   - Connection badge with live status
+   - Snackbar notifications for commands
+   - Add Top Site dialog with validation
+   - Settings dialog with organized sections
+   - Export dialog with copy-to-clipboard
+   - Import dialog with JSON validation
+
+### Critical Bug Fixes (v1.2.0)
 
 1. **WebSocket Connection Fixed:**
    - *Bug:* The Android app was connecting to `ws://host:9090/ws` but the server only listens on the root path `ws://host:9090`. **This made connection impossible.**
@@ -28,41 +83,12 @@ This document tracks our recent fixes, improvements, and the current working sta
    - *Bug:* The server used `ifaddr` for smart IP selection but it was never listed in `requirements.txt` or auto-installed.
    - *Fix:* Added `ifaddr>=0.2.0` to requirements and added auto-install logic in server.py.
 
-### New Features
-
-4. **PC Remote Power Control:**
-   - Added `restart`, `shutdown`, `logout`, and `hibernate` commands
-   - Works on Linux (systemctl), macOS (osascript), and Windows (shutdown.exe)
-   - New tiles added to the System page with dedicated icons
-
-5. **Improved systemd Installation:**
-   - Install script now uses absolute paths instead of fragile `$(pwd)`
-   - Creates a proper launcher script at `~/.local/bin/phonedeck-server`
-   - Added `loginctl enable-linger` so user services start at boot
-   - Changed restart policy from `on-failure` to `always` with 3s delay
-   - Added `--install` flag for manual installation of PyInstaller builds
-
-6. **Heartbeat Monitoring:**
-   - Server pings all connected WebSocket clients every 30 seconds
-   - Dead clients (no pong within 5s) are automatically cleaned up
-
-7. **Command Feedback in App:**
-   - Toast/snackbar notifications appear when commands are sent
-   - Better visual feedback for user actions
-
-8. **Semantic Version Comparison in Updater:**
-   - Updater now compares versions numerically (e.g., v1.2.0 > v1.1.4)
-   - Better handling of Linux updates for git vs PyInstaller builds
-
-9. **Graceful Server Shutdown:**
-   - Server properly handles SIGINT/SIGTERM signals
-   - Cleans up mDNS registration on exit
-
 ### Technical Improvements
 
-- **Windows PyInstaller spec:** Added `ifaddr` to hidden imports
-- **Linux PyInstaller spec:** Added `ifaddr` to hidden imports
-- **Version bumped to v1.2.0** across all components
+- **Android:** Upgraded to Compose BOM 2024.06.01, Kotlin 1.9.23, AGP 8.4.0
+- **Dependencies:** Added kotlinx.serialization for type-safe JSON config
+- **Python:** Added `updater` to hidden imports for PyInstaller
+- **Version:** Bumped to v1.3.0 across all components
 
 ## Recent Fixes (v1.1.4)
 
@@ -77,6 +103,17 @@ In our previous iteration, we tackled various critical bugs reported on the Linu
 
 ## Upcoming Improvements
 
-- Expand Windows control sets (brightness, advanced media keys).
-- Allow users to fully edit default pages and swap out application icons without recompiling the Android APK.
-- Add screen mirroring/streaming capability.
+- [ ] Expand Windows control sets (brightness, advanced media keys, app launchers)
+- [ ] Allow users to fully edit default pages and swap out application icons without recompiling the Android APK
+- [ ] Add screen mirroring/streaming capability
+- [ ] Add plugin system for custom commands
+- [ ] Add support for multiple simultaneous connections
+- [ ] Add authentication/encryption option for WebSocket
+- [ ] Create F-Droid and Play Store listings
+- [ ] Add Tile templates for common applications
+- [ ] Implement dark/light theme toggle
+- [ ] Add keyboard shortcuts display on long-press
+
+---
+
+*Last Updated: July 2026 - v1.3.0*

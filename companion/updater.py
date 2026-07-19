@@ -6,8 +6,8 @@ import subprocess
 import sys
 import urllib.request
 
-CURRENT_VERSION = "v1.2.0"
-REPO = "Iamhero337/PhoneDeck"
+CURRENT_VERSION = "v1.3.0"
+REPO = "iamhero337/PhoneDeck"
 
 
 def _parse_version(version_str: str) -> tuple:

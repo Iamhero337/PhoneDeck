@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +61,8 @@ private fun TileButton(
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF2A2A3E)
+            containerColor = Color(tile.color),
+            disabledContainerColor = Color(0xFF1A1A2E)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -76,7 +76,7 @@ private fun TileButton(
             Icon(
                 imageVector = getIconForTile(tile.icon),
                 contentDescription = tile.label,
-                tint = if (enabled) Color(0xFF4A90D9) else Color(0xFF555566),
+                tint = if (enabled) Color(tile.iconColor) else Color(0xFF555566),
                 modifier = Modifier.size(32.dp)
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -154,36 +154,34 @@ fun ConnectionBadge(
     }
 }
 
-private fun getIconForTile(icon: String): ImageVector {
-    return when (icon) {
-        "code" -> Icons.Default.Code
-        "terminal" -> Icons.Default.Terminal
-        "chrome", "public" -> Icons.Default.Public
-        "music_note" -> Icons.Default.MusicNote
-        "draw" -> Icons.Default.Draw
-        "image" -> Icons.Default.Image
-        "brush" -> Icons.Default.Brush
-        "visibility" -> Icons.Default.Visibility
-        "volume_up" -> Icons.Default.VolumeUp
-        "volume_down" -> Icons.Default.VolumeDown
-        "volume_off" -> Icons.Default.VolumeOff
-        "play_arrow" -> Icons.Default.PlayArrow
-        "skip_next" -> Icons.Default.SkipNext
-        "skip_previous" -> Icons.Default.SkipPrevious
-        "brightness_high" -> Icons.Default.BrightnessHigh
-        "brightness_low" -> Icons.Default.BrightnessLow
-        "screenshot" -> Icons.Default.Screenshot
-        "lock" -> Icons.Default.Lock
-        "bedtime" -> Icons.Default.Bedtime
-        "play_pause" -> Icons.Default.Pause
-        "next" -> Icons.Default.SkipNext
-        "prev" -> Icons.Default.SkipPrevious
-        "brightness_up" -> Icons.Default.BrightnessHigh
-        "brightness_down" -> Icons.Default.BrightnessLow
-        "restart" -> Icons.Default.RestartAlt
-        "shutdown" -> Icons.Default.PowerSettingsNew
-        "logout" -> Icons.Default.ExitToApp
-        "hibernate" -> Icons.Default.Bedtime
-        else -> Icons.Default.Apps
-    }
+private fun getIconForTile(icon: String) = when (icon) {
+    "code" -> Icons.Default.Code
+    "terminal" -> Icons.Default.Terminal
+    "chrome", "public" -> Icons.Default.Public
+    "music_note" -> Icons.Default.MusicNote
+    "draw" -> Icons.Default.Draw
+    "image" -> Icons.Default.Image
+    "brush" -> Icons.Default.Brush
+    "visibility" -> Icons.Default.Visibility
+    "volume_up" -> Icons.Default.VolumeUp
+    "volume_down" -> Icons.Default.VolumeDown
+    "volume_off" -> Icons.Default.VolumeOff
+    "play_arrow" -> Icons.Default.PlayArrow
+    "skip_next" -> Icons.Default.SkipNext
+    "skip_previous" -> Icons.Default.SkipPrevious
+    "brightness_high" -> Icons.Default.BrightnessHigh
+    "brightness_low" -> Icons.Default.BrightnessLow
+    "screenshot" -> Icons.Default.Screenshot
+    "lock" -> Icons.Default.Lock
+    "bedtime" -> Icons.Default.Bedtime
+    "play_pause" -> Icons.Default.Pause
+    "next" -> Icons.Default.SkipNext
+    "prev" -> Icons.Default.SkipPrevious
+    "brightness_up" -> Icons.Default.BrightnessHigh
+    "brightness_down" -> Icons.Default.BrightnessLow
+    "restart" -> Icons.Default.RestartAlt
+    "shutdown" -> Icons.Default.PowerSettingsNew
+    "logout" -> Icons.Default.ExitToApp
+    "hibernate" -> Icons.Default.Bedtime
+    else -> Icons.Default.Apps
 }

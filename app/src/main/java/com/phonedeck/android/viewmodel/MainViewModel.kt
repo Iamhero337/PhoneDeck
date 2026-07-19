@@ -1,18 +1,22 @@
 package com.phonedeck.android.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.os.Vibrator
+import android.os.VibrationEffect
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.phonedeck.android.data.models.Page
+import com.phonedeck.android.data.models.Tile
 import com.phonedeck.android.data.repository.ConfigRepository
 import com.phonedeck.android.network.PhoneDeckClient
+import com.phonedeck.android.network.MdnsScanner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
-import com.phonedeck.android.network.MdnsScanner
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -21,6 +25,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var discoveryJob: Job? = null
     private var connectionJob: Job? = null
     private var reconnectAttempts = 0
+    private val vibrator = application.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
     private val _pages = MutableStateFlow<List<Page>>(emptyList())
     val pages: StateFlow<List<Page>> = _pages.asStateFlow()
@@ -44,8 +49,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         ConfigRepository.init(application)
-        _pages.value = ConfigRepository.getPages()
+        loadPages()
         startDiscovery()
+    }
+
+    private fun loadPages() {
+        viewModelScope.launch {
+            _pages.value = ConfigRepository.getPages()
+        }
     }
 
     private fun startDiscovery() {
@@ -118,16 +129,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendCommand(command: String) {
+        if (ConfigRepository.getHapticFeedback()) {
+            vibrator.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
+        }
         client.sendCommand(command)
         _lastCommandResult.value = "Sent: $command"
     }
 
     fun addTopSite(label: String, url: String) {
-        var cleanUrl = url.trim()
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            cleanUrl = "https://$cleanUrl"
-        }
-        ConfigRepository.addTopSite(label, cleanUrl)
+        ConfigRepository.addTopSite(label, url)
+        _pages.value = ConfigRepository.getPages()
+    }
+
+    fun removeTopSite(id: String) {
+        ConfigRepository.removeTopSite(id)
         _pages.value = ConfigRepository.getPages()
     }
 
@@ -143,6 +158,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         connectedHost = ""
         reconnectAttempts = 0
         startDiscovery()
+    }
+
+    fun addCustomPage(page: Page) {
+        viewModelScope.launch {
+            ConfigRepository.addCustomPage(page)
+            _pages.value = ConfigRepository.getPages()
+        }
+    }
+
+    fun updatePage(page: Page) {
+        viewModelScope.launch {
+            ConfigRepository.updatePage(page)
+            _pages.value = ConfigRepository.getPages()
+        }
+    }
+
+    fun deletePage(pageId: String) {
+        viewModelScope.launch {
+            ConfigRepository.deletePage(pageId)
+            _pages.value = ConfigRepository.getPages()
+        }
+    }
+
+    fun reorderPages(pages: List<Page>) {
+        viewModelScope.launch {
+            ConfigRepository.reorderPages(pages)
+            _pages.value = ConfigRepository.getPages()
+        }
+    }
+
+    fun resetToDefaults() {
+        viewModelScope.launch {
+            ConfigRepository.resetToDefaults()
+            _pages.value = ConfigRepository.getPages()
+            _currentPageIndex.value = 0
+        }
+    }
+
+    fun exportConfig(): String = ConfigRepository.exportConfig()
+
+    fun importConfig(jsonString: String) {
+        viewModelScope.launch {
+            ConfigRepository.importConfig(jsonString)
+            _pages.value = ConfigRepository.getPages()
+        }
     }
 
     override fun onCleared() {
