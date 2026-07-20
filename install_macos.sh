@@ -4,7 +4,15 @@
 
 set -e
 
-SERVER_DIR="$(cd "$(dirname "$0")" && pwd)/companion"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/companion/server.py" ]; then
+    SERVER_DIR="$SCRIPT_DIR/companion"
+elif [ -f "$SCRIPT_DIR/../desktop/server.py" ]; then
+    SERVER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/desktop"
+else
+    echo "ERROR: Cannot find server.py. Run this script from the PhoneDeck release folder."
+    exit 1
+fi
 SERVER_SCRIPT="$SERVER_DIR/server.py"
 PLIST_NAME="com.phonedeck.server"
 PLIST_DIR="$HOME/Library/LaunchAgents"

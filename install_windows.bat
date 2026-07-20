@@ -2,7 +2,16 @@
 REM PhoneDeck Windows Installation Script
 REM Installs dependencies and creates startup entry
 
-set SERVER_DIR=%~dp0companion
+set SCRIPT_DIR=%~dp0
+if exist "%SCRIPT_DIR%companion\server.py" (
+    set SERVER_DIR=%SCRIPT_DIR%companion
+) else if exist "%SCRIPT_DIR%..\desktop\server.py" (
+    set SERVER_DIR=%SCRIPT_DIR%..\desktop
+) else (
+    echo ERROR: Cannot find server.py. Run this script from the PhoneDeck release folder.
+    pause
+    exit /b 1
+)
 set SERVER_EXE=%SERVER_DIR%\phonedeck-server-windows.exe
 set STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 set SHORTCUT_NAME=PhoneDeck Server.lnk
