@@ -10,6 +10,8 @@ graph TD
     B -->|macOS Handlers| C[macOS (AppleScript / open)]
     B -->|Linux Handlers| D[Linux (subprocess / xdg / pactl / brightnessctl)]
     B -->|Windows Handlers| E[Windows (pywin32 / wmi / rundll32)]
+    F[Web Config UI (Browser)] -->|HTTP REST :9091| B
+    B -->|config_sync via WebSocket| A
 ```
 
 ## 2. Components
@@ -25,6 +27,15 @@ The Android client is built natively using **Kotlin** and **Jetpack Compose** fo
 - **State Management:** Uses `ViewModel` with `StateFlow` for reactive UI updates.
 - **Persistence:** `SharedPreferences` with JSON serialization (via kotlinx.serialization) for pages, tiles, and settings.
 - **Import/Export:** Full configuration backup/restore as JSON.
+
+### The Desktop Config Web UI
+The Python server also serves a **web-based configuration interface** on port 9091:
+- **Dashboard:** View all pages and their tiles in a clean dark-themed UI
+- **CRUD Operations:** Create, read, update, and delete pages and tiles
+- **App Picker:** Scans the system for installed applications and lets you add them as tiles with one click
+- **Real-Time Sync:** "Sync to Phone" button sends the full configuration to all connected Android devices via WebSocket
+- **No Dependencies:** Built with vanilla HTML, CSS, and JavaScript (no frameworks needed)
+- **Persistent Storage:** Config is saved to `~/.phonedeck/config.json` on the desktop
 
 ### The Desktop Server
 The desktop server is a lightweight **Python** background script (`server.py`). It relies on:
@@ -100,7 +111,7 @@ data class Page(
 
 ### WebSocket Messages
 
-**Client → Server:**
+**Client → Server (Command):**
 ```json
 {
   "command": "volume_up"
@@ -113,11 +124,41 @@ Or for open_url:
 }
 ```
 
-**Server → Client:**
+**Client → Server (Config Upload - on connect):**
+```json
+{
+  "type": "config_init",
+  "pages": [
+    {
+      "id": "prod",
+      "name": "Prod",
+      "tiles": [
+        {"id": "dev1", "label": "VS Code", "icon": "code", "command": "code", "color": -16734274, "iconColor": -16754215}
+      ]
+    }
+  ]
+}
+```
+
+**Server → Client (Command Response):**
 ```json
 {
   "status": "ok",
   "command": "volume_up"
+}
+```
+
+**Server → Client (Config Sync):**
+```json
+{
+  "type": "config_sync",
+  "pages": [
+    {
+      "id": "prod",
+      "name": "Prod",
+      "tiles": [...]
+    }
+  ]
 }
 ```
 
@@ -130,10 +171,33 @@ Error response:
 }
 ```
 
+### Config Sync Flow
+1. Phone connects to server and sends `config_init` with its current pages (only if not already synced)
+2. Server stores the config and serves it to the web UI via HTTP REST API
+3. User modifies pages/tiles in the web UI at http://localhost:9091
+4. User clicks "Sync to Phone" → server sends `config_sync` to all connected phones
+5. Phone receives `config_sync` and updates its local SharedPreferences immediately
+
+### HTTP REST API (Config Web UI)
+The Config HTTP server runs on port 9091 alongside the WebSocket server:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/pages` | Get all pages with tiles |
+| GET | `/api/apps` | Scan installed applications |
+| GET | `/api/status` | Server health + connected clients |
+| POST | `/api/pages` | Create a new page |
+| PUT | `/api/pages/:id` | Rename a page |
+| DELETE | `/api/pages/:id` | Delete a page (built-in pages protected) |
+| POST | `/api/tiles` | Add a tile to a page |
+| PUT | `/api/tiles/:id` | Update a tile |
+| DELETE | `/api/tiles/:pageId/:tileId` | Delete a tile |
+| POST | `/api/sync` | Push config to all connected phones |
+
 ### mDNS Service
 - **Service Type:** `_phonedeck._tcp.local.`
 - **Port:** 9090
-- **Properties:** `version` (e.g., "1.3.1")
+- **Properties:** `version` (e.g., "1.4.0")
 
 ## 11. Security Considerations
 
@@ -155,6 +219,9 @@ Error response:
 - Windows: `phonedeck-server-windows.spec` → `dist/phonedeck-server-windows.exe`
 - Hidden imports: `websockets`, `zeroconf`, `ifaddr`, `updater`
 
+### Config Web UI
+The web UI is built with vanilla HTML, CSS, and JavaScript (no build step needed). It lives in `companion/web-ui/` and is served directly by the Python server's built-in HTTP server.
+
 ### Local Build
 - **Android:** `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`
 - **Linux Server:** `cd companion && pyinstaller --clean --noconfirm phonedeck-server-linux.spec` → `companion/dist/phonedeck-server-linux`
@@ -162,4 +229,4 @@ Error response:
 
 ---
 
-*Architecture version: 1.3.1*
+*Architecture version: 1.4.0*

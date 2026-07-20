@@ -9,12 +9,50 @@ This document tracks our recent fixes, improvements, and the current working sta
 - **Auto-Reconnect:** The app automatically reconnects with exponential backoff if the connection drops.
 - **WebSocket Communication:** Near instantaneous, two-way communication between the phone and the desktop, with heartbeat monitoring.
 - **Cross-Platform Foundation:** The Python server runs effectively on Windows, macOS, and Linux, with proper daemonization/systemd background support on Linux and Windows.
+- **Desktop Config Web UI:** Browser-based tile and page editor at http://localhost:9091 with app scanning.
+- **Real-Time Config Sync:** Push configuration from desktop web UI to phone instantly.
 - **Dynamic Top Sites:** Users can add websites dynamically in the Android app and have them immediately saved and mapped to the desktop's default browser.
 - **PC Power Control:** Restart, shutdown, logout, sleep, and hibernate your computer remotely.
 - **Custom Pages & Tiles:** Full UI for creating, editing, reordering, and deleting custom pages and tiles.
 - **Import/Export Configuration:** Backup and restore entire layout as JSON.
 - **Haptic Feedback:** Optional vibration on tile press.
 - **Settings Screen:** Comprehensive settings for connection, feedback, pages, backup, and about.
+
+## v1.4.0 - Desktop Config Web UI
+
+### New Features
+1. **Desktop Config Web UI:**
+   - Built-in HTTP server on port 9091 serves a full customization interface
+   - View all pages and tiles with live preview
+   - Add, edit, and delete tiles directly from the browser
+   - Create, rename, and delete pages
+   - Dark theme matching the Android app
+
+2. **App Scanner:**
+   - Auto-detects installed applications on Linux (parses .desktop files)
+   - Auto-detects installed applications on macOS (scans /Applications)
+   - Auto-detects installed applications on Windows (scans Start Menu)
+   - One-click add: pick an app and it becomes a tile instantly
+
+3. **Real-Time Config Sync:**
+   - "Sync to Phone" button pushes config to all connected devices
+   - Phone receives config_sync via WebSocket and updates immediately
+   - Server persists config to ~/.phonedeck/config.json
+   - Phone defers to server-synced config after first sync (no overwrite conflicts)
+
+4. **Phone Config Upload:**
+   - Phone sends its current pages to server on first connection
+   - Server serves phone's config to the web UI
+
+### Changes
+- Design page removed from Android defaults (Figma, Photoshop tiles)
+- ConfigRepository supports full server-side config overrides
+- MainViewModel handles config_sync WebSocket messages
+- Installer scripts work from both project root and release folder layouts
+- Installers display Config UI URL after installation
+
+### Removed
+- Hardcoded Design page from default pages (now customizable via web UI)
 
 ## v1.3.1 Fixes
 
@@ -97,4 +135,4 @@ This document tracks our recent fixes, improvements, and the current working sta
 
 ---
 
-*Last Updated: July 2026 - v1.3.1*
+*Last Updated: July 2026 - v1.4.0*

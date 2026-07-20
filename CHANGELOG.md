@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-20
+
+### Added
+- **Desktop Config Web UI:** New web-based customization interface served by the Python server at http://localhost:9091
+- **App Scanner:** Auto-detects installed applications on Linux (.desktop files), macOS (/Applications), and Windows (Start Menu)
+- **Web UI Tile Management:** View, add, edit, and delete tiles from any browser
+- **Web UI Page Management:** Create, rename, and delete pages from any browser
+- **Real-Time Config Sync:** Push configuration from the desktop web UI to the phone instantly via WebSocket
+- **Config Persistence on Desktop:** Server stores config in `~/.phonedeck/config.json`
+- **Phone Config Upload:** Phone sends its current config to the server on first connect
+- **Server Config Authority:** Phone defers to server-synced config after first sync (avoids overwrite conflicts)
+
+### Changed
+- **Design page removed** from Android default pages (customizable via web UI instead)
+- **ConfigRepository** now supports full server-side config overrides via `serverConfig`
+- **MainViewModel** handles `config_sync` WebSocket messages to apply desktop changes
+- **Installer scripts** now work from both project root and release folder layouts
+- **All installer scripts** show Config UI URL after installation
+
+### Removed
+- Hardcoded Design page (Figma, Photoshop tiles) from Android defaults
+
 ## [1.3.1] - 2026-07-19
 
 ### Fixed

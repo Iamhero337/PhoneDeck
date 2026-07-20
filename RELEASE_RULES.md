@@ -15,6 +15,7 @@
 # companion/server.py           → VERSION = "X.Y.Z"
 # companion/updater.py          → CURRENT_VERSION = "vX.Y.Z"
 # MainActivity.kt               → CURRENT_VERSION = "vX.Y.Z"
+# SettingsScreen.kt             → "Version X.Y.Z" in About section
 ```
 
 **versionCode MUST increment by 1 every release** (not optional - Android enforces this)
