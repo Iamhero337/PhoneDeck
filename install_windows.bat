@@ -62,6 +62,9 @@ echo.
 echo   The server is now running and will start automatically on login.
 echo   Open the PhoneDeck app on your phone and it will auto-discover this server.
 echo.
+echo   Config UI: http://localhost:9091
+echo   (Open in browser to customize apps & shortcuts)
+echo.
 echo   To stop: Close the console window or use Task Manager.
 echo   To uninstall: Delete "%STARTUP_DIR%\%SHORTCUT_NAME%"
 echo.

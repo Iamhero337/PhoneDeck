@@ -6,7 +6,7 @@ import subprocess
 import sys
 import urllib.request
 
-CURRENT_VERSION = "v1.3.6"
+CURRENT_VERSION = "v1.4.0"
 REPO = "iamhero337/PhoneDeck"
 
 

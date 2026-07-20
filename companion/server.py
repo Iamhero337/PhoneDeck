@@ -5,7 +5,9 @@ Run this on your desktop to receive commands from the PhoneDeck Android app.
 """
 
 import asyncio
+import copy
 import glob
+import http.server
 import json
 import logging
 import os
@@ -15,7 +17,9 @@ import socket
 import subprocess
 import shutil
 import sys
+import threading
 import time
+import urllib.parse
 import uuid
 import webbrowser
 
@@ -56,8 +60,46 @@ log = logging.getLogger("phonedeck")
 SYSTEM = platform.system()
 CONNECTED_CLIENTS = set()
 
-VERSION = "1.3.6"
+VERSION = "1.4.0"
 PORT = 9090
+CONFIG_PORT = 9091
+CONFIG_DIR = os.path.expanduser("~/.phonedeck")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+WEB_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web-ui")
+
+DEFAULT_PAGES = [
+    {"id": "prod", "name": "Prod", "tiles": [
+        {"id": "dev1", "label": "VS Code", "icon": "code", "command": "code", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "dev2", "label": "Terminal", "icon": "terminal", "command": "terminal", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "dev3", "label": "Browser", "icon": "public", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "dev4", "label": "Spotify", "icon": "music_note", "command": "spotify", "color": 0xFF1E1E2E, "iconColor": 0xFF1DB954},
+        {"id": "dev5", "label": "Slack", "icon": "chat", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFF4A154B},
+        {"id": "dev6", "label": "Docker", "icon": "cloud", "command": "terminal", "color": 0xFF1E1E2E, "iconColor": 0xFF2496ED},
+        {"id": "dev7", "label": "Postman", "icon": "api", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFFFF6C37},
+        {"id": "dev8", "label": "Zoom", "icon": "videocam", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFF2D8CFF},
+        {"id": "dev9", "label": "Notion", "icon": "article", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFF000000},
+    ]},
+    {"id": "media", "name": "Media", "tiles": [
+        {"id": "md1", "label": "Volume Up", "icon": "volume_up", "command": "volume_up", "color": 0xFF1E1E2E, "iconColor": 0xFF4CAF50},
+        {"id": "md2", "label": "Volume Down", "icon": "volume_down", "command": "volume_down", "color": 0xFF1E1E2E, "iconColor": 0xFF4CAF50},
+        {"id": "md3", "label": "Mute", "icon": "volume_off", "command": "mute", "color": 0xFF1E1E2E, "iconColor": 0xFF4CAF50},
+        {"id": "md4", "label": "Play/Pause", "icon": "play_pause", "command": "play_pause", "color": 0xFF1E1E2E, "iconColor": 0xFF1DB954},
+        {"id": "md5", "label": "Next", "icon": "next", "command": "next", "color": 0xFF1E1E2E, "iconColor": 0xFF1DB954},
+        {"id": "md6", "label": "Prev", "icon": "prev", "command": "prev", "color": 0xFF1E1E2E, "iconColor": 0xFF1DB954},
+    ]},
+    {"id": "system", "name": "System", "tiles": [
+        {"id": "sys1", "label": "Screenshot", "icon": "screenshot", "command": "screenshot", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "sys2", "label": "Lock", "icon": "lock", "command": "lock", "color": 0xFF1E1E2E, "iconColor": 0xFFE53935},
+        {"id": "sys3", "label": "Sleep", "icon": "bedtime", "command": "sleep", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "sys4", "label": "Browser", "icon": "public", "command": "browser", "color": 0xFF1E1E2E, "iconColor": 0xFF4A90D9},
+        {"id": "sys5", "label": "Restart", "icon": "restart", "command": "restart", "color": 0xFF1E1E2E, "iconColor": 0xFFF57C00},
+        {"id": "sys6", "label": "Shutdown", "icon": "shutdown", "command": "shutdown", "color": 0xFF1E1E2E, "iconColor": 0xFFF57C00},
+        {"id": "sys7", "label": "Logout", "icon": "logout", "command": "logout", "color": 0xFF1E1E2E, "iconColor": 0xFFF57C00},
+        {"id": "sys8", "label": "Hibernate", "icon": "hibernate", "command": "hibernate", "color": 0xFF1E1E2E, "iconColor": 0xFFF57C00},
+        {"id": "sys9", "label": "Brightness +", "icon": "brightness_up", "command": "brightness_up", "color": 0xFF1E1E2E, "iconColor": 0xFFFFC107},
+        {"id": "sys10", "label": "Brightness -", "icon": "brightness_down", "command": "brightness_down", "color": 0xFF1E1E2E, "iconColor": 0xFFFFC107},
+    ]},
+]
 
 COMMAND_MAP = {
     "code": "Visual Studio Code",
@@ -96,6 +138,395 @@ async def broadcast(message: str):
             *(client.send(message) for client in CONNECTED_CLIENTS.copy()),
             return_exceptions=True
         )
+
+
+class ConfigManager:
+    def __init__(self):
+        self.pages = []
+        self.load()
+
+    def load(self):
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE) as f:
+                    data = json.load(f)
+                    self.pages = data.get("pages", [])
+            except Exception:
+                self.pages = []
+        if not self.pages:
+            self.reset_to_defaults()
+
+    def save(self):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"version": "1", "pages": self.pages}, f, indent=2)
+
+    def reset_to_defaults(self):
+        self.pages = copy.deepcopy(DEFAULT_PAGES)
+        self.save()
+
+    def get_pages(self):
+        return self.pages
+
+    def set_pages(self, pages):
+        self.pages = pages
+        self.save()
+
+    def add_page(self, name):
+        page_id = str(uuid.uuid4())
+        page = {"id": page_id, "name": name, "tiles": []}
+        self.pages.append(page)
+        self.save()
+        return page
+
+    def update_page(self, page_id, name):
+        for page in self.pages:
+            if page["id"] == page_id:
+                page["name"] = name
+                self.save()
+                return page
+        return None
+
+    def delete_page(self, page_id):
+        protected = {"prod", "media", "system"}
+        if page_id in protected:
+            return False
+        self.pages = [p for p in self.pages if p["id"] != page_id]
+        self.save()
+        return True
+
+    def add_tile(self, page_id, tile_data):
+        tile_id = str(uuid.uuid4())
+        tile = {"id": tile_id}
+        tile.update(tile_data)
+        for page in self.pages:
+            if page["id"] == page_id:
+                if "tiles" not in page:
+                    page["tiles"] = []
+                page["tiles"].append(tile)
+                self.save()
+                return tile
+        return None
+
+    def update_tile(self, tile_id, tile_data):
+        for page in self.pages:
+            for i, tile in enumerate(page.get("tiles", [])):
+                if tile["id"] == tile_id:
+                    page["tiles"][i].update(tile_data)
+                    self.save()
+                    return page["tiles"][i]
+        return None
+
+    def delete_tile(self, page_id, tile_id):
+        for page in self.pages:
+            if page["id"] == page_id:
+                page["tiles"] = [t for t in page.get("tiles", []) if t["id"] != tile_id]
+                self.save()
+                return True
+        return False
+
+
+config_manager = ConfigManager()
+
+
+def hex_to_color_int(hex_str):
+    hex_str = hex_str.lstrip("#")
+    r, g, b = int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16)
+    return (0xFF << 24) | (r << 16) | (g << 8) | b
+
+
+def color_int_to_hex(color_int):
+    r = (color_int >> 16) & 0xFF
+    g = (color_int >> 8) & 0xFF
+    b = color_int & 0xFF
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def scan_installed_apps():
+    try:
+        if SYSTEM == "Linux":
+            return _scan_linux_apps()
+        elif SYSTEM == "Darwin":
+            return _scan_macos_apps()
+        elif SYSTEM == "Windows":
+            return _scan_windows_apps()
+    except Exception:
+        pass
+    return []
+
+
+def _scan_linux_apps():
+    seen = set()
+    apps = []
+    dirs = [
+        "/usr/share/applications",
+        "/usr/local/share/applications",
+        os.path.expanduser("~/.local/share/applications"),
+        "/var/lib/snapd/desktop/applications",
+        "/var/lib/flatpak/exports/share/applications",
+    ]
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        try:
+            for f in sorted(os.listdir(d)):
+                if not f.endswith(".desktop"):
+                    continue
+                path = os.path.join(d, f)
+                try:
+                    with open(path, "r", errors="ignore") as fh:
+                        content = fh.read()
+                except Exception:
+                    continue
+                name = None
+                exec_cmd = None
+                skip = False
+                for line in content.split("\n"):
+                    if line.startswith("Name=") and name is None:
+                        name = line.split("=", 1)[1].strip()
+                    elif line.startswith("Exec="):
+                        exec_cmd = line.split("=", 1)[1].strip()
+                    elif line.startswith("NoDisplay=true"):
+                        skip = True
+                if name and exec_cmd and not skip and name not in seen:
+                    seen.add(name)
+                    exec_cmd = exec_cmd.split("%")[0].split(" ")[0].strip()
+                    exec_cmd = exec_cmd.strip('"').strip("'")
+                    if exec_cmd and not exec_cmd.startswith("/"):
+                        apps.append({"name": name, "command": exec_cmd})
+        except Exception:
+            continue
+    return sorted(apps, key=lambda x: x["name"].lower())
+
+
+def _scan_macos_apps():
+    apps = []
+    dirs = [
+        "/Applications",
+        "/Applications/Utilities",
+        os.path.expanduser("~/Applications"),
+        "/System/Applications",
+        "/System/Applications/Utilities",
+    ]
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        try:
+            for f in sorted(os.listdir(d)):
+                if not f.endswith(".app"):
+                    continue
+                name = f.replace(".app", "")
+                bundle_path = os.path.join(d, f)
+                plist_path = os.path.join(bundle_path, "Contents", "Info.plist")
+                cmd = f"open -a '{name}'"
+                apps.append({"name": name, "command": cmd})
+        except Exception:
+            continue
+    return apps
+
+
+def _scan_windows_apps():
+    apps = []
+    dirs = [
+        os.path.expandvars("%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs"),
+        os.path.expandvars("%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs"),
+    ]
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        try:
+            for root, dirs_list, files in os.walk(d):
+                for f in files:
+                    if f.endswith(".lnk"):
+                        name = os.path.splitext(f)[0]
+                        apps.append({"name": name, "command": f"start {name}"})
+        except Exception:
+            continue
+    seen = set()
+    unique = []
+    for a in apps:
+        if a["name"] not in seen:
+            seen.add(a["name"])
+            unique.append(a)
+    return sorted(unique, key=lambda x: x["name"].lower())
+
+
+class ConfigHTTPHandler(http.server.BaseHTTPRequestHandler):
+    config_manager = None
+    loop = None
+
+    def log_message(self, format, *args):
+        log.info(f"[HTTP] {args[0]} {args[1]} {args[2]}")
+
+    def _send_json(self, data, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
+
+    def _send_file(self, path, mime):
+        try:
+            with open(path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception:
+            self._send_json({"error": "Not found"}, 404)
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/")
+
+        if path == "/" or path == "":
+            self._send_file(os.path.join(WEB_UI_DIR, "index.html"), "text/html")
+        elif path == "/style.css":
+            self._send_file(os.path.join(WEB_UI_DIR, "style.css"), "text/css")
+        elif path == "/script.js":
+            self._send_file(os.path.join(WEB_UI_DIR, "script.js"), "application/javascript")
+        elif path == "/api/pages":
+            self._send_json({"pages": self.config_manager.get_pages()})
+        elif path == "/api/apps":
+            apps = scan_installed_apps()
+            self._send_json({"apps": apps})
+        elif path == "/api/status":
+            self._send_json({"connected": len(CONNECTED_CLIENTS), "version": VERSION})
+        else:
+            self._send_json({"error": "Not found"}, 404)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode() if length else "{}"
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_json({"error": "Invalid JSON"}, 400)
+            return
+
+        if path == "/api/pages":
+            name = data.get("name", "").strip()
+            if not name:
+                self._send_json({"error": "Name is required"}, 400)
+                return
+            page = self.config_manager.add_page(name)
+            self._send_json({"page": page}, 201)
+
+        elif path == "/api/tiles":
+            page_id = data.get("pageId", "")
+            if not page_id:
+                self._send_json({"error": "pageId is required"}, 400)
+                return
+            tile_data = {
+                "label": data.get("label", ""),
+                "command": data.get("command", ""),
+                "icon": data.get("icon", "apps"),
+                "color": data.get("color", 0xFF1E1E2E),
+                "iconColor": data.get("iconColor", 0xFF4A90D9),
+            }
+            if isinstance(tile_data["color"], str):
+                tile_data["color"] = hex_to_color_int(tile_data["color"])
+            if isinstance(tile_data["iconColor"], str):
+                tile_data["iconColor"] = hex_to_color_int(tile_data["iconColor"])
+            tile = self.config_manager.add_tile(page_id, tile_data)
+            if tile:
+                self._send_json({"tile": tile}, 201)
+            else:
+                self._send_json({"error": "Page not found"}, 404)
+
+        elif path == "/api/sync":
+            self._send_config_sync_to_phones()
+            self._send_json({"connected": len(CONNECTED_CLIENTS), "status": "ok"})
+
+        else:
+            self._send_json({"error": "Not found"}, 404)
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode() if length else "{}"
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_json({"error": "Invalid JSON"}, 400)
+            return
+
+        parts = path.split("/")
+
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "pages":
+            page_id = parts[3]
+            name = data.get("name", "").strip()
+            if not name:
+                self._send_json({"error": "Name is required"}, 400)
+                return
+            page = self.config_manager.update_page(page_id, name)
+            if page:
+                self._send_json({"page": page})
+            else:
+                self._send_json({"error": "Page not found"}, 404)
+
+        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "tiles":
+            tile_id = parts[3]
+            tile_data = {}
+            for key in ("label", "command", "icon", "color", "iconColor"):
+                if key in data:
+                    tile_data[key] = data[key]
+            if "color" in tile_data and isinstance(tile_data["color"], str):
+                tile_data["color"] = hex_to_color_int(tile_data["color"])
+            if "iconColor" in tile_data and isinstance(tile_data["iconColor"], str):
+                tile_data["iconColor"] = hex_to_color_int(tile_data["iconColor"])
+            tile = self.config_manager.update_tile(tile_id, tile_data)
+            if tile:
+                self._send_json({"tile": tile})
+            else:
+                self._send_json({"error": "Tile not found"}, 404)
+        else:
+            self._send_json({"error": "Not found"}, 404)
+
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        parts = path.split("/")
+
+        if len(parts) == 4 and parts[1] == "api" and parts[2] == "pages":
+            page_id = parts[3]
+            if self.config_manager.delete_page(page_id):
+                self._send_json({"status": "deleted"})
+            else:
+                self._send_json({"error": "Cannot delete built-in page"}, 400)
+
+        elif len(parts) == 5 and parts[1] == "api" and parts[2] == "tiles":
+            page_id = parts[3]
+            tile_id = parts[4]
+            if self.config_manager.delete_tile(page_id, tile_id):
+                self._send_json({"status": "deleted"})
+            else:
+                self._send_json({"error": "Tile not found"}, 404)
+        else:
+            self._send_json({"error": "Not found"}, 404)
+
+    def _send_config_sync_to_phones(self):
+        pages = self.config_manager.get_pages()
+        message = json.dumps({"type": "config_sync", "pages": pages})
+        coro = broadcast(message)
+        if hasattr(self.__class__, 'main_loop') and self.__class__.main_loop:
+            asyncio.run_coroutine_threadsafe(coro, self.__class__.main_loop)
+
+
+def start_http_server(cm, main_loop):
+    ConfigHTTPHandler.config_manager = cm
+    ConfigHTTPHandler.main_loop = main_loop
+    server = http.server.HTTPServer(("0.0.0.0", CONFIG_PORT), ConfigHTTPHandler)
+    log.info(f"Config web UI started at http://localhost:{CONFIG_PORT}")
+    try:
+        server.serve_forever()
+    except Exception:
+        pass
 
 
 def _run_async(cmd: list, shell: bool = False) -> dict:
@@ -455,15 +886,32 @@ async def handler(websocket):
     CONNECTED_CLIENTS.add(websocket)
     try:
         async for message in websocket:
-            log.info(f"Received: {message}")
+            log.info(f"Received: {message[:300]}")
+            command = ""
             try:
                 payload = json.loads(message)
-                command = payload.get("command", message)
+                msg_type = payload.get("type", "")
+                if msg_type == "config_init":
+                    pages = payload.get("pages", [])
+                    if pages:
+                        config_manager.set_pages(pages)
+                        log.info(f"Config received from phone ({len(pages)} pages)")
+                    await websocket.send(json.dumps({"type": "config_init_ack", "status": "ok"}))
+                    continue
+                elif msg_type == "command":
+                    command = payload.get("command", "")
+                else:
+                    command = payload.get("command", message)
             except (json.JSONDecodeError, TypeError):
                 command = message.strip()
-            result = execute_command(command)
-            result["command"] = command
-            await websocket.send(json.dumps(result))
+
+            if command:
+                result = execute_command(command)
+                result["command"] = command
+                try:
+                    await websocket.send(json.dumps(result))
+                except Exception:
+                    pass
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
@@ -536,8 +984,15 @@ async def main():
     print("  ║                                      ║")
     print("  ║  \033[32mThe app will now auto-discover\033[0m      ║")
     print("  ║  \033[32mthis server using mDNS.\033[0m             ║")
+    print("  ║                                      ║")
+    print(f"  ║  \033[36mConfig UI: http://{local_ip}:{CONFIG_PORT}\033[0m ║")
+    print(f"  ║  \033[36m          http://localhost:{CONFIG_PORT}\033[0m  ║")
     print("  ╚══════════════════════════════════════╝")
     print()
+
+    main_loop = asyncio.get_running_loop()
+    http_thread = threading.Thread(target=start_http_server, args=(config_manager, main_loop), daemon=True)
+    http_thread.start()
 
     hostname = socket.gethostname()
     unique_id = uuid.uuid4().hex[:6]

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -62,6 +63,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             client.commandResponses.collect { response ->
                 try {
                     val json = JSONObject(response)
+                    if (json.optString("type") == "config_sync") {
+                        val pagesArray = json.getJSONArray("pages")
+                        ConfigRepository.syncFromJson(pagesArray)
+                        _pages.value = ConfigRepository.getPages()
+                        _lastCommandResult.value = "Config synced from desktop"
+                        return@collect
+                    }
                     val status = json.optString("status", "")
                     val command = json.optString("command", "")
                     if (status == "error") {
@@ -107,6 +115,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun sendConfigInit() {
+        if (ConfigRepository.hasServerConfig()) return
+        val pages = ConfigRepository.getPages()
+        val arr = JSONArray()
+        pages.forEach { page ->
+            val pageObj = JSONObject()
+            pageObj.put("id", page.id)
+            pageObj.put("name", page.name)
+            val tilesArr = JSONArray()
+            page.tiles.forEach { tile ->
+                val tileObj = JSONObject()
+                tileObj.put("id", tile.id)
+                tileObj.put("label", tile.label)
+                tileObj.put("icon", tile.icon)
+                tileObj.put("command", tile.command)
+                tileObj.put("color", tile.color)
+                tileObj.put("iconColor", tile.iconColor)
+                tilesArr.put(tileObj)
+            }
+            pageObj.put("tiles", tilesArr)
+            arr.put(pageObj)
+        }
+        val payload = JSONObject()
+        payload.put("type", "config_init")
+        payload.put("pages", arr)
+        client.sendCommand(payload.toString())
+    }
+
     private suspend fun runConnectionLoop(host: String, port: Int) {
         while (connectedHost.isNotBlank()) {
             try {
@@ -116,6 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _connectionStatus.value = "Connected to ${state.serverName}"
                             _connected.value = true
                             reconnectAttempts = 0
+                            sendConfigInit()
                         }
                         is PhoneDeckClient.ConnectionState.Disconnected -> {
                             _connectionStatus.value = "Disconnected"

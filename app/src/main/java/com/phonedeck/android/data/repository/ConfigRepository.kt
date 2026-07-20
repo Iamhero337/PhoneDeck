@@ -13,6 +13,8 @@ object ConfigRepository {
     private var prefs: SharedPreferences? = null
     private val topSitesTiles = mutableListOf<Tile>()
     private val customPages = mutableMapOf<String, Page>()
+    private var serverConfig: String? = null
+    private var serverPages: List<Page>? = null
 
     private val defaultPages = listOf(
         Page(
@@ -28,14 +30,6 @@ object ConfigRepository {
                 Tile("dev7", "Postman", "api", "browser", 0xFF1E1E2E.toInt(), 0xFFFF6C37.toInt()),
                 Tile("dev8", "Zoom", "videocam", "browser", 0xFF1E1E2E.toInt(), 0xFF2D8CFF.toInt()),
                 Tile("dev9", "Notion", "article", "browser", 0xFF1E1E2E.toInt(), 0xFF000000.toInt()),
-            )
-        ),
-        Page(
-            id = "design",
-            name = "Design",
-            tiles = listOf(
-                Tile("ds1", "Figma", "draw", "figma", 0xFF1E1E2E.toInt(), 0xFFF24E1E.toInt()),
-                Tile("ds2", "Photoshop", "image", "photoshop", 0xFF1E1E2E.toInt(), 0xFF31A8FF.toInt()),
             )
         ),
         Page(
@@ -70,11 +64,50 @@ object ConfigRepository {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("phonedeck_prefs", Context.MODE_PRIVATE)
+        serverConfig = prefs?.getString("server_config", null)
+        if (serverConfig != null) {
+            loadServerConfig()
+            return
+        }
         loadTopSites()
         if (topSitesTiles.isEmpty()) {
             seedDefaultTopSites()
         }
         loadCustomPages()
+    }
+
+    private fun loadServerConfig() {
+        serverPages = null
+        val json = serverConfig ?: return
+        try {
+            val pagesArray = JSONArray(json)
+            val pages = mutableListOf<Page>()
+            for (i in 0 until pagesArray.length()) {
+                val pageObj = pagesArray.getJSONObject(i)
+                val id = pageObj.getString("id")
+                val name = pageObj.getString("name")
+                val tilesArray = pageObj.getJSONArray("tiles")
+                val tiles = mutableListOf<Tile>()
+                for (j in 0 until tilesArray.length()) {
+                    val tileObj = tilesArray.getJSONObject(j)
+                    tiles.add(Tile(
+                        id = tileObj.getString("id"),
+                        label = tileObj.getString("label"),
+                        icon = tileObj.optString("icon", ""),
+                        command = tileObj.optString("command", ""),
+                        color = tileObj.optInt("color", 0xFF2A2A3E.toInt()),
+                        iconColor = tileObj.optInt("iconColor", 0xFF4A90D9.toInt()),
+                    ))
+                }
+                pages.add(Page(id, name, tiles))
+            }
+            serverPages = pages
+        } catch (e: JSONException) {
+            serverConfig = null
+            serverPages = null
+            loadTopSites()
+            loadCustomPages()
+        }
     }
 
     private fun seedDefaultTopSites() {
@@ -216,6 +249,9 @@ object ConfigRepository {
     }
 
     fun getPages(): List<Page> {
+        if (serverPages != null) {
+            return serverPages!!
+        }
         val pages = defaultPages.toMutableList()
         pages.add(Page("top_sites", "Top Sites", topSitesTiles.toList()))
         pages.addAll(customPages.values)
@@ -246,11 +282,14 @@ object ConfigRepository {
     }
 
     fun resetToDefaults() {
+        clearServerConfig()
         topSitesTiles.clear()
         customPages.clear()
         saveTopSites()
         saveCustomPages()
     }
+
+    fun hasServerConfig(): Boolean = serverConfig != null
 
     fun exportConfig(): String {
         val obj = JSONObject()
@@ -280,6 +319,7 @@ object ConfigRepository {
 
     fun importConfig(jsonString: String) {
         try {
+            clearServerConfig()
             val obj = JSONObject(jsonString)
             val pagesArray = obj.getJSONArray("pages")
             topSitesTiles.clear()
@@ -303,7 +343,7 @@ object ConfigRepository {
                 }
                 if (id == "top_sites") {
                     topSitesTiles.addAll(tiles)
-                } else if (!id.startsWith("prod") && !id.startsWith("design") && !id.startsWith("media") && !id.startsWith("system")) {
+                } else if (!id.startsWith("prod") && !id.startsWith("media") && !id.startsWith("system")) {
                     customPages[id] = Page(id, name, tiles)
                 }
             }
@@ -312,6 +352,18 @@ object ConfigRepository {
         } catch (e: JSONException) {
             e.printStackTrace()
         }
+    }
+
+    fun syncFromJson(pagesArray: JSONArray) {
+        serverConfig = pagesArray.toString()
+        prefs?.edit()?.putString("server_config", serverConfig)?.apply()
+        loadServerConfig()
+    }
+
+    private fun clearServerConfig() {
+        serverConfig = null
+        serverPages = null
+        prefs?.edit()?.remove("server_config")?.apply()
     }
 
     fun getHapticFeedback(): Boolean {

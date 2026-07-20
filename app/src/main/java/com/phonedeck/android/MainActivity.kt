@@ -27,7 +27,7 @@ import org.json.JSONObject
 import java.net.URL
 
 
-const val CURRENT_VERSION = "v1.3.6"
+const val CURRENT_VERSION = "v1.4.0"
 
 private fun parseVersion(versionStr: String): List<Int> {
     val cleaned = versionStr.removePrefix("v")

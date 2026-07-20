@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhoneDeck Configurator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">settings_remote</span>
+      <h1>PhoneDeck Configurator</h1>
+    </div>
+    <div class="header-right">
+      <span id="connectionStatus" class="status-badge">No Phone Connected</span>
+      <button id="syncBtn" class="btn btn-primary" onclick="syncToPhone()">
+        <span class="material-symbols-outlined">sync</span> Sync to Phone
+      </button>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h2>Pages</h2>
+        <button class="btn btn-icon" onclick="showAddPageModal()" title="Add Page">
+          <span class="material-symbols-outlined">add</span>
+        </button>
+      </div>
+      <div id="pageList"></div>
+    </aside>
+
+    <main id="content">
+      <div class="content-header">
+        <h2 id="pageName">Select a page</h2>
+        <button class="btn btn-secondary" onclick="showAddTileModal()" id="addTileBtn" style="display:none">
+          <span class="material-symbols-outlined">add</span> Add Tile
+        </button>
+      </div>
+      <div id="tileGrid"></div>
+      <div id="emptyState" class="empty-state">
+        <span class="material-symbols-outlined empty-icon">dashboard_customize</span>
+        <p>Select a page from the sidebar to edit its tiles, or create a new page.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Tile Modal -->
+<div id="tileModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'tileModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="tileModalTitle">Add Tile</h3>
+      <button class="btn btn-icon" onclick="closeModalById('tileModal')">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editTileId" value="">
+      <input type="hidden" id="editTilePageId" value="">
+      <div class="form-group">
+        <label for="tileLabel">Label</label>
+        <input type="text" id="tileLabel" placeholder="e.g. VS Code">
+      </div>
+      <div class="form-group">
+        <label for="tileCommand">Command</label>
+        <input type="text" id="tileCommand" placeholder="e.g. code, open_url:https://...">
+      </div>
+      <div class="form-group">
+        <label for="tileIcon">Icon (Material Symbol name)</label>
+        <input type="text" id="tileIcon" placeholder="e.g. code, music_note, public">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tileColor">Tile Color</label>
+          <input type="color" id="tileColor" value="#1e1e2e">
+        </div>
+        <div class="form-group">
+          <label for="tileIconColor">Icon Color</label>
+          <input type="color" id="tileIconColor" value="#4a90d9">
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-full" onclick="showAppPicker()">
+        <span class="material-symbols-outlined">apps</span> Pick from installed apps
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModalById('tileModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTile()">
+        <span class="material-symbols-outlined">check</span> Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Page Modal -->
+<div id="pageModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'pageModal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Add Page</h3>
+      <button class="btn btn-icon" onclick="closeModalById('pageModal')">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="pageNameInput">Page Name</label>
+        <input type="text" id="pageNameInput" placeholder="e.g. Gaming">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModalById('pageModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePage()">
+        <span class="material-symbols-outlined">check</span> Create
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- App Picker Modal -->
+<div id="appPickerModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'appPickerModal')">
+  <div class="modal modal-lg" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Installed Applications</h3>
+      <button class="btn btn-icon" onclick="closeModalById('appPickerModal')">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <input type="text" id="appSearch" placeholder="Search apps..." oninput="filterApps()">
+      </div>
+      <div id="appList" class="app-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast" style="display:none"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
