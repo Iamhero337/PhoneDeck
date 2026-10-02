@@ -301,7 +301,7 @@ fun SettingsScreen(
 
                     SettingsRow(
                         title = "PhoneDeck",
-                        subtitle = "Version 1.4.0 • Built with ❤️ by @iamhero337",
+                        subtitle = "Version 1.5.0 • Built with ❤️ by @iamhero337",
                         trailing = {}
                     )
                     HorizontalDivider(color = Color(0xFF3A3A4E))

@@ -208,7 +208,7 @@ Write requests must send `Content-Type: application/json` and, if the browser se
 ### mDNS Service
 - **Service Type:** `_phonedeck._tcp.local.`
 - **Port:** 9090
-- **Properties:** `version` (e.g., "1.4.0")
+- **Properties:** `version` (e.g., "1.5.0")
 
 ## 11. Security Considerations
 
@@ -240,4 +240,4 @@ The web UI is built with vanilla HTML, CSS, and JavaScript (no build step needed
 
 ---
 
-*Architecture version: 1.4.0*
+*Architecture version: 1.5.0*

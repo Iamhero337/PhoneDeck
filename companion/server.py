@@ -59,7 +59,7 @@ log = logging.getLogger("phonedeck")
 SYSTEM = platform.system()
 CONNECTED_CLIENTS = set()
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 PORT = 9090
 CONFIG_PORT = 9091
 CONFIG_DIR = os.path.expanduser("~/.phonedeck")

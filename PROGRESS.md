@@ -18,6 +18,17 @@ This document tracks our recent fixes, improvements, and the current working sta
 - **Haptic Feedback:** Optional vibration on tile press.
 - **Settings Screen:** Comprehensive settings for connection, feedback, pages, backup, and about.
 
+## v1.5.0 - Config UI Overhaul
+
+- Redesigned desktop config web UI: tile editor (built-in / app / website actions, icon picker, color swatches, live preview), phone preview pane, drag & drop, duplicate/undo, import/export/reset, unsynced-changes indicator, keyboard shortcuts, mobile layout
+- Unsynced desktop edits survive phone reconnects and server restarts
+- Packaged server binaries now bundle the web UI
+- App scanner fixes for Linux (Flatpak, Desktop Actions), macOS and Windows
+- Config API hardened against cross-site requests and DNS rebinding
+- 36 new tile icons on Android
+
+See CHANGELOG.md for the full list.
+
 ## v1.4.0 - Desktop Config Web UI
 
 ### New Features
@@ -135,4 +146,4 @@ This document tracks our recent fixes, improvements, and the current working sta
 
 ---
 
-*Last Updated: July 2026 - v1.4.0*
+*Last Updated: October 2026 - v1.5.0*
