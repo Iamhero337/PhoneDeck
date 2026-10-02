@@ -3,145 +3,291 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a12">
 <title>PhoneDeck Configurator</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234A90D9'/%3E%3Crect x='7' y='7' width='8' height='8' rx='2' fill='white'/%3E%3Crect x='17' y='7' width='8' height='8' rx='2' fill='white' opacity='.7'/%3E%3Crect x='7' y='17' width='8' height='8' rx='2' fill='white' opacity='.7'/%3E%3Crect x='17' y='17' width='8' height='8' rx='2' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..600,0..1,0&display=block">
 <link rel="stylesheet" href="style.css">
+<script src="script.js" defer></script>
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="header-left">
-      <span class="material-symbols-outlined header-icon">settings_remote</span>
-      <h1>PhoneDeck Configurator</h1>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <span class="material-symbols-outlined">grid_view</span>
+      </span>
+      <div class="brand-text">
+        <h1>PhoneDeck</h1>
+        <span class="brand-sub" id="hostLabel">Configurator</span>
+      </div>
     </div>
-    <div class="header-right">
-      <span id="connectionStatus" class="status-badge">No Phone Connected</span>
-      <button id="syncBtn" class="btn btn-primary" onclick="syncToPhone()">
-        <span class="material-symbols-outlined">sync</span> Sync to Phone
+    <div class="topbar-actions">
+      <span id="connectionStatus" class="status-badge" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-text">Checking…</span>
+      </span>
+      <div class="menu-wrap">
+        <button class="btn btn-icon" id="moreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" title="More actions">
+          <span class="material-symbols-outlined">more_vert</span>
+        </button>
+        <div class="menu" id="moreMenu" role="menu" hidden>
+          <button role="menuitem" data-action="export"><span class="material-symbols-outlined">download</span>Export config</button>
+          <button role="menuitem" data-action="import"><span class="material-symbols-outlined">upload</span>Import config…</button>
+          <div class="menu-sep" role="separator"></div>
+          <button role="menuitem" data-action="shortcuts"><span class="material-symbols-outlined">keyboard</span>Keyboard shortcuts</button>
+          <button role="menuitem" data-action="reset" class="danger"><span class="material-symbols-outlined">restart_alt</span>Reset to defaults…</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <button id="syncBtn" class="btn btn-primary" title="Push this layout to your phone (Ctrl+S)">
+        <span class="material-symbols-outlined sync-icon">sync</span>
+        <span class="sync-label">Sync to phone</span>
+        <span class="dirty-dot" aria-hidden="true"></span>
       </button>
     </div>
   </header>
 
   <div id="main">
-    <aside id="sidebar">
+    <aside id="sidebar" aria-label="Pages">
       <div class="sidebar-header">
         <h2>Pages</h2>
-        <button class="btn btn-icon" onclick="showAddPageModal()" title="Add Page">
+        <button class="btn btn-icon btn-sm" id="addPageBtn" title="New page (P)">
           <span class="material-symbols-outlined">add</span>
         </button>
       </div>
-      <div id="pageList"></div>
+      <nav id="pageList" class="page-list"></nav>
+      <p class="sidebar-hint">Drag pages to reorder. Drop a tile on a page to move it there.</p>
     </aside>
 
     <main id="content">
-      <div class="content-header">
-        <h2 id="pageName">Select a page</h2>
-        <button class="btn btn-secondary" onclick="showAddTileModal()" id="addTileBtn" style="display:none">
-          <span class="material-symbols-outlined">add</span> Add Tile
-        </button>
+      <div class="content-header" id="contentHeader" hidden>
+        <div class="title-block">
+          <h2 id="pageName" title="Double-click to rename"></h2>
+          <span id="pageMeta" class="page-meta"></span>
+        </div>
+        <div class="content-actions">
+          <button class="btn btn-ghost" id="renamePageBtn" title="Rename page">
+            <span class="material-symbols-outlined">edit</span><span class="hide-sm">Rename</span>
+          </button>
+          <button class="btn btn-ghost danger" id="deletePageBtn" title="Delete page">
+            <span class="material-symbols-outlined">delete</span><span class="hide-sm">Delete</span>
+          </button>
+          <button class="btn btn-secondary" id="addTileBtn" title="New tile (N)">
+            <span class="material-symbols-outlined">add</span>Add tile
+          </button>
+        </div>
       </div>
-      <div id="tileGrid"></div>
-      <div id="emptyState" class="empty-state">
+
+      <div id="tileGrid" class="tile-grid" role="list"></div>
+
+      <div id="emptyState" class="empty-state" hidden>
         <span class="material-symbols-outlined empty-icon">dashboard_customize</span>
-        <p>Select a page from the sidebar to edit its tiles, or create a new page.</p>
+        <p id="emptyText">Loading your layout…</p>
       </div>
     </main>
-  </div>
-</div>
 
-<!-- Add/Edit Tile Modal -->
-<div id="tileModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'tileModal')">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h3 id="tileModalTitle">Add Tile</h3>
-      <button class="btn btn-icon" onclick="closeModalById('tileModal')">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="editTileId" value="">
-      <input type="hidden" id="editTilePageId" value="">
-      <div class="form-group">
-        <label for="tileLabel">Label</label>
-        <input type="text" id="tileLabel" placeholder="e.g. VS Code">
+    <aside id="previewPane" aria-label="Phone preview">
+      <div class="preview-label">
+        <span class="material-symbols-outlined">smartphone</span> Phone preview
       </div>
-      <div class="form-group">
-        <label for="tileCommand">Command</label>
-        <input type="text" id="tileCommand" placeholder="e.g. code, open_url:https://...">
-      </div>
-      <div class="form-group">
-        <label for="tileIcon">Icon (Material Symbol name)</label>
-        <input type="text" id="tileIcon" placeholder="e.g. code, music_note, public">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="tileColor">Tile Color</label>
-          <input type="color" id="tileColor" value="#1e1e2e">
-        </div>
-        <div class="form-group">
-          <label for="tileIconColor">Icon Color</label>
-          <input type="color" id="tileIconColor" value="#4a90d9">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-tabs" id="phoneTabs"></div>
+          <div class="phone-grid" id="phoneGrid"></div>
         </div>
       </div>
-      <button class="btn btn-secondary btn-full" onclick="showAppPicker()">
-        <span class="material-symbols-outlined">apps</span> Pick from installed apps
-      </button>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModalById('tileModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTile()">
-        <span class="material-symbols-outlined">check</span> Save
-      </button>
-    </div>
+    </aside>
   </div>
 </div>
 
-<!-- Add Page Modal -->
-<div id="pageModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'pageModal')">
-  <div class="modal" onclick="event.stopPropagation()">
+<!-- Tile editor -->
+<dialog id="tileModal" class="modal modal-xl" aria-labelledby="tileModalTitle">
+  <form id="tileForm" method="dialog" novalidate>
     <div class="modal-header">
-      <h3>Add Page</h3>
-      <button class="btn btn-icon" onclick="closeModalById('pageModal')">
+      <h3 id="tileModalTitle">Add tile</h3>
+      <button type="button" class="btn btn-icon" data-close aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body editor">
+      <div class="editor-form">
+        <div class="form-group">
+          <label for="tileLabel">Label</label>
+          <input type="text" id="tileLabel" maxlength="64" placeholder="e.g. VS Code" autocomplete="off" required>
+        </div>
+
+        <div class="form-group">
+          <span class="label" id="actionTypeLabel">Action</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="actionTypeLabel">
+            <label><input type="radio" name="actionType" value="builtin" checked><span><span class="material-symbols-outlined">bolt</span>Built-in</span></label>
+            <label><input type="radio" name="actionType" value="app"><span><span class="material-symbols-outlined">apps</span>App / command</span></label>
+            <label><input type="radio" name="actionType" value="url"><span><span class="material-symbols-outlined">link</span>Website</span></label>
+          </div>
+        </div>
+
+        <div class="form-group" data-action-panel="builtin">
+          <label for="builtinSelect">Built-in action</label>
+          <select id="builtinSelect"></select>
+        </div>
+        <div class="form-group" data-action-panel="app" hidden>
+          <label for="tileCommand">Command</label>
+          <div class="input-row">
+            <input type="text" id="tileCommand" placeholder="e.g. firefox, code, obs" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn btn-secondary" id="browseAppsBtn">
+              <span class="material-symbols-outlined">search</span>Browse apps
+            </button>
+          </div>
+          <p class="help">Runs a program on your computer. Pick one from the installed apps list or type its name.</p>
+        </div>
+        <div class="form-group" data-action-panel="url" hidden>
+          <label for="tileUrl">Website URL</label>
+          <input type="url" id="tileUrl" placeholder="https://example.com" autocomplete="off" spellcheck="false">
+          <p class="help">Opens in your computer's default browser.</p>
+        </div>
+
+        <div class="form-group">
+          <div class="label-row">
+            <label for="iconSearch">Icon</label>
+            <span class="help" id="iconCurrent"></span>
+          </div>
+          <input type="search" id="iconSearch" placeholder="Filter icons…" autocomplete="off">
+          <div id="iconGrid" class="icon-grid" role="listbox" aria-label="Icons"></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tileColor">Tile color</label>
+            <div class="color-field">
+              <input type="color" id="tileColor" value="#1e1e2e">
+              <div class="swatches" data-target="tileColor"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="tileIconColor">Icon color</label>
+            <div class="color-field">
+              <input type="color" id="tileIconColor" value="#4a90d9">
+              <div class="swatches" data-target="tileIconColor"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="editor-preview">
+        <span class="label">Preview</span>
+        <div class="preview-stage">
+          <div class="phone-tile" id="livePreview">
+            <span class="material-symbols-outlined phone-tile-icon">apps</span>
+            <span class="phone-tile-label">Label</span>
+          </div>
+        </div>
+        <code class="preview-command" id="previewCommand"></code>
+        <p class="warn" id="iconWarning" hidden>
+          <span class="material-symbols-outlined">warning</span>
+          This icon isn't available in the Android app and will show as the default icon.
+        </p>
+        <p class="warn" id="contrastWarning" hidden>
+          <span class="material-symbols-outlined">contrast</span>
+          <span id="contrastText"></span>
+        </p>
+        <button type="button" class="btn btn-ghost btn-full" id="testTileBtn" title="Run this action on this computer now">
+          <span class="material-symbols-outlined">play_arrow</span>Test on this computer
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="kbd-hint hide-sm"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save</span>
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="saveTileBtn">
+        <span class="material-symbols-outlined">check</span>Save
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Page name -->
+<dialog id="pageModal" class="modal" aria-labelledby="pageModalTitle">
+  <form id="pageForm" method="dialog" novalidate>
+    <div class="modal-header">
+      <h3 id="pageModalTitle">New page</h3>
+      <button type="button" class="btn btn-icon" data-close aria-label="Close">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label for="pageNameInput">Page Name</label>
-        <input type="text" id="pageNameInput" placeholder="e.g. Gaming">
+        <label for="pageNameInput">Page name</label>
+        <input type="text" id="pageNameInput" maxlength="64" placeholder="e.g. Gaming" autocomplete="off" required>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeModalById('pageModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="savePage()">
-        <span class="material-symbols-outlined">check</span> Create
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="savePageBtn">
+        <span class="material-symbols-outlined">check</span><span>Create</span>
       </button>
     </div>
+  </form>
+</dialog>
+
+<!-- App picker -->
+<dialog id="appPickerModal" class="modal modal-lg" aria-labelledby="appPickerTitle">
+  <div class="modal-header">
+    <h3 id="appPickerTitle">Installed applications</h3>
+    <button type="button" class="btn btn-icon" data-close aria-label="Close">
+      <span class="material-symbols-outlined">close</span>
+    </button>
   </div>
-</div>
-
-<!-- App Picker Modal -->
-<div id="appPickerModal" class="modal-overlay" style="display:none" onclick="closeModal(event, 'appPickerModal')">
-  <div class="modal modal-lg" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h3>Installed Applications</h3>
-      <button class="btn btn-icon" onclick="closeModalById('appPickerModal')">
-        <span class="material-symbols-outlined">close</span>
-      </button>
+  <div class="modal-body">
+    <div class="search-field">
+      <span class="material-symbols-outlined">search</span>
+      <input type="search" id="appSearch" placeholder="Search apps…" autocomplete="off">
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <input type="text" id="appSearch" placeholder="Search apps..." oninput="filterApps()">
-      </div>
-      <div id="appList" class="app-list"></div>
-    </div>
+    <div id="appList" class="app-list" role="listbox" aria-label="Applications"></div>
   </div>
-</div>
+</dialog>
 
-<!-- Toast notification -->
-<div id="toast" class="toast" style="display:none"></div>
+<!-- Confirm -->
+<dialog id="confirmModal" class="modal modal-sm" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <div class="modal-body confirm-body">
+      <span class="material-symbols-outlined confirm-icon">warning</span>
+      <h3 id="confirmTitle">Are you sure?</h3>
+      <p id="confirmMessage"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn btn-danger" value="ok" id="confirmOk">Delete</button>
+    </div>
+  </form>
+</dialog>
 
-<script src="script.js"></script>
+<!-- Shortcuts -->
+<dialog id="shortcutsModal" class="modal modal-sm" aria-labelledby="shortcutsTitle">
+  <div class="modal-header">
+    <h3 id="shortcutsTitle">Keyboard shortcuts</h3>
+    <button type="button" class="btn btn-icon" data-close aria-label="Close">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <dl class="shortcuts">
+      <dt><kbd>N</kbd></dt><dd>New tile</dd>
+      <dt><kbd>P</kbd></dt><dd>New page</dd>
+      <dt><kbd>Ctrl</kbd>+<kbd>S</kbd></dt><dd>Sync to phone</dd>
+      <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous / next page</dd>
+      <dt><kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>Move focused tile</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Edit focused tile</dd>
+      <dt><kbd>Delete</kbd></dt><dd>Delete focused tile</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close dialog</dd>
+    </dl>
+  </div>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
 </body>
 </html>

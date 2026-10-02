@@ -5,7 +5,7 @@ a = Analysis(
     ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('web-ui', 'web-ui')],
     hiddenimports=['websockets', 'zeroconf', 'ifaddr', 'updater'],
     hookspath=[],
     hooksconfig={},

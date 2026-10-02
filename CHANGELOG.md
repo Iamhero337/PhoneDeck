@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Redesigned Config Web UI:** glass dark theme, live phone preview pane, responsive layout down to phone width, keyboard shortcuts (`N`, `P`, `Ctrl+S`, `[`/`]`, `?`), reduced-motion support
+- **Tile editor:** action type picker (Built-in / App or command / Website), visual icon picker limited to icons the phone can render, color swatches, live preview, contrast warnings, "Test on this computer" button
+- **Drag & drop:** reorder tiles and pages; drop a tile on a page in the sidebar to move it there; `Alt+←/→` reorders with the keyboard
+- **Duplicate tiles**, **undo tile delete**, **import/export/reset** from the web UI
+- **Unsynced-changes indicator** on the Sync button; web UI refreshes automatically when the phone changes the config
+- **More tile icons on Android:** folder, mail, calendar, settings, home, gaming, camera, mic, headphones, keyboard, wifi, bluetooth, media transport controls and more (36 new)
+- New REST endpoints: `/api/meta`, `/api/pages/reorder`, `/api/tiles/reorder`, `/api/tiles/:id/duplicate`, `/api/tiles/:id/move`, `/api/test`, `/api/import`, `/api/reset`
+
+### Fixed
+- **Packaged Linux server binary now bundles the web UI** (previously the config UI returned 404 outside the source tree)
+- **Unsynced desktop edits are no longer overwritten** when the phone reconnects, including after a server restart
+- **macOS app scanner** produced `open -a 'App'` commands that failed when run; it now emits the app name
+- **Windows app scanner** produced `start App` commands that failed; it now uses the Start Menu shortcut path, opened with `os.startfile`
+- **Linux app scanner** read `Exec=` from Desktop Action sections, ignored `Hidden`/`Type`, and dropped arguments (Flatpak apps launched bare `flatpak`); commands may now include arguments (split safely without a shell)
+- App names containing quotes broke the app picker; page/tile ids and icon names were injected into HTML unescaped
+- Toasts overlapped and cut each other off
+- Config file writes are now atomic, and the HTTP server is multi-threaded and lock-protected, so a slow app scan no longer blocks the UI
+
+### Security
+- Config API rejects cross-site requests (Origin check + JSON-only writes) and foreign `Host` headers (DNS rebinding); removed `Access-Control-Allow-Origin: *`
+- Web UI served with a Content-Security-Policy, `X-Frame-Options: DENY` and `nosniff`
+- Windows command launch no longer passes user-supplied names unquoted through the shell
+
 ## [1.4.0] - 2026-07-20
 
 ### Added

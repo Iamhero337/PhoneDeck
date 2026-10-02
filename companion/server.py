@@ -15,6 +15,7 @@ import platform
 import signal
 import socket
 import subprocess
+import shlex
 import shutil
 import sys
 import threading
@@ -35,14 +36,12 @@ except ImportError:
     import websockets
 
 try:
-    from zeroconf import ServiceInfo, Zeroconf
     from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 except ImportError:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "zeroconf"])
     except subprocess.CalledProcessError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "zeroconf", "--break-system-packages"])
-    from zeroconf import ServiceInfo, Zeroconf
     from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 
 try:
@@ -65,7 +64,17 @@ PORT = 9090
 CONFIG_PORT = 9091
 CONFIG_DIR = os.path.expanduser("~/.phonedeck")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-WEB_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web-ui")
+# PyInstaller unpacks bundled data files to sys._MEIPASS; fall back to the source tree.
+WEB_UI_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "web-ui")
+WEB_UI_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/style.css": ("style.css", "text/css; charset=utf-8"),
+    "/script.js": ("script.js", "application/javascript; charset=utf-8"),
+}
+PROTECTED_PAGES = {"prod", "media", "system"}
+MAX_LABEL_LEN = 64
+MAX_COMMAND_LEN = 2048
 
 DEFAULT_PAGES = [
     {"id": "prod", "name": "Prod", "tiles": [
@@ -132,101 +141,246 @@ def _check_tool(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-async def broadcast(message: str):
-    if CONNECTED_CLIENTS:
-        await asyncio.gather(
-            *(client.send(message) for client in CONNECTED_CLIENTS.copy()),
-            return_exceptions=True
-        )
+def _to_color_int(value, default):
+    """Accept a '#rrggbb' string or an ARGB int (signed or unsigned) and return an unsigned ARGB int."""
+    if isinstance(value, str):
+        try:
+            return hex_to_color_int(value)
+        except (ValueError, IndexError):
+            return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        return default
+    return value & 0xFFFFFFFF
+
+
+def _clean_tile(data, existing=None):
+    """Validate and normalise tile fields coming from the web UI or an import."""
+    tile = dict(existing or {})
+    if "label" in data or existing is None:
+        tile["label"] = str(data.get("label", "")).strip()[:MAX_LABEL_LEN]
+    if "command" in data or existing is None:
+        tile["command"] = str(data.get("command", "")).strip()[:MAX_COMMAND_LEN]
+    if "icon" in data or existing is None:
+        tile["icon"] = str(data.get("icon", "") or "apps").strip()[:64] or "apps"
+    if "color" in data or existing is None:
+        tile["color"] = _to_color_int(data.get("color"), 0xFF1E1E2E)
+    if "iconColor" in data or existing is None:
+        tile["iconColor"] = _to_color_int(data.get("iconColor"), 0xFF4A90D9)
+    return tile
 
 
 class ConfigManager:
+    """Thread-safe store for pages/tiles, persisted to ~/.phonedeck/config.json.
+
+    `revision` increments on every change; `synced_revision` records the revision
+    last pushed to phones, so the web UI can show unsynced edits and phone
+    config_init messages don't clobber them.
+    """
+
     def __init__(self):
         self.pages = []
+        self.revision = 0
+        self.synced_revision = 0
+        self._lock = threading.RLock()
         self.load()
 
-    def load(self):
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE) as f:
-                    data = json.load(f)
-                    self.pages = data.get("pages", [])
-            except Exception:
-                self.pages = []
-        if not self.pages:
-            self.reset_to_defaults()
+    @property
+    def dirty(self):
+        return self.revision != self.synced_revision
 
-    def save(self):
+    def load(self):
+        with self._lock:
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE) as f:
+                        data = json.load(f)
+                        self.pages = data.get("pages", [])
+                        if data.get("pendingSync"):
+                            self.synced_revision = -1
+                except Exception:
+                    log.warning("Config file is unreadable, falling back to defaults")
+                    self.pages = []
+            if not self.pages:
+                self.pages = copy.deepcopy(DEFAULT_PAGES)
+                self.save(synced=True)
+
+    def save(self, synced=False):
+        with self._lock:
+            self.revision += 1
+            if synced:
+                self.synced_revision = self.revision
+            self._write()
+
+    def _write(self):
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(CONFIG_FILE, "w") as f:
-            json.dump({"version": "1", "pages": self.pages}, f, indent=2)
+        # Write to a temp file and rename so a crash never leaves a truncated config.
+        # pendingSync survives restarts so a reconnecting phone can't overwrite unsynced edits.
+        tmp = CONFIG_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({"version": "1", "pendingSync": self.dirty, "pages": self.pages}, f, indent=2)
+        os.replace(tmp, CONFIG_FILE)
+
+    def mark_synced(self):
+        with self._lock:
+            if self.dirty:
+                self.synced_revision = self.revision
+                self._write()
+
+    def snapshot(self):
+        with self._lock:
+            return copy.deepcopy(self.pages), self.revision
 
     def reset_to_defaults(self):
-        self.pages = copy.deepcopy(DEFAULT_PAGES)
-        self.save()
+        with self._lock:
+            self.pages = copy.deepcopy(DEFAULT_PAGES)
+            self.save()
 
     def get_pages(self):
-        return self.pages
+        with self._lock:
+            return copy.deepcopy(self.pages)
 
-    def set_pages(self, pages):
-        self.pages = pages
-        self.save()
+    def set_pages(self, pages, from_phone=False):
+        with self._lock:
+            self.pages = pages
+            # When the config came from the phone, the phone already has it: nothing is pending.
+            self.save(synced=from_phone)
+
+    def import_pages(self, pages):
+        """Replace all pages with validated imported data. Returns the page count or None if invalid."""
+        if not isinstance(pages, list):
+            return None
+        cleaned = []
+        for p in pages:
+            if not isinstance(p, dict) or not str(p.get("name", "")).strip():
+                return None
+            tiles = []
+            for t in p.get("tiles", []) or []:
+                if not isinstance(t, dict):
+                    return None
+                tile = _clean_tile(t)
+                tile["id"] = str(t.get("id") or uuid.uuid4())
+                tiles.append(tile)
+            cleaned.append({
+                "id": str(p.get("id") or uuid.uuid4()),
+                "name": str(p["name"]).strip()[:MAX_LABEL_LEN],
+                "tiles": tiles,
+            })
+        with self._lock:
+            self.pages = cleaned
+            self.save()
+        return len(cleaned)
+
+    def _find_page(self, page_id):
+        return next((p for p in self.pages if p["id"] == page_id), None)
 
     def add_page(self, name):
-        page_id = str(uuid.uuid4())
-        page = {"id": page_id, "name": name, "tiles": []}
-        self.pages.append(page)
-        self.save()
-        return page
+        with self._lock:
+            page = {"id": str(uuid.uuid4()), "name": name[:MAX_LABEL_LEN], "tiles": []}
+            self.pages.append(page)
+            self.save()
+            return copy.deepcopy(page)
 
     def update_page(self, page_id, name):
-        for page in self.pages:
-            if page["id"] == page_id:
-                page["name"] = name
-                self.save()
-                return page
-        return None
+        with self._lock:
+            page = self._find_page(page_id)
+            if not page:
+                return None
+            page["name"] = name[:MAX_LABEL_LEN]
+            self.save()
+            return copy.deepcopy(page)
 
     def delete_page(self, page_id):
-        protected = {"prod", "media", "system"}
-        if page_id in protected:
-            return False
-        self.pages = [p for p in self.pages if p["id"] != page_id]
-        self.save()
-        return True
+        with self._lock:
+            if page_id in PROTECTED_PAGES:
+                return False
+            self.pages = [p for p in self.pages if p["id"] != page_id]
+            self.save()
+            return True
+
+    def reorder_pages(self, order):
+        """Reorder pages to match a list of ids. Unknown ids are ignored, missing pages keep their relative order at the end."""
+        with self._lock:
+            by_id = {p["id"]: p for p in self.pages}
+            ordered = [by_id.pop(pid) for pid in order if pid in by_id]
+            self.pages = ordered + [p for p in self.pages if p["id"] in by_id]
+            self.save()
 
     def add_tile(self, page_id, tile_data):
-        tile_id = str(uuid.uuid4())
-        tile = {"id": tile_id}
-        tile.update(tile_data)
-        for page in self.pages:
-            if page["id"] == page_id:
-                if "tiles" not in page:
-                    page["tiles"] = []
-                page["tiles"].append(tile)
-                self.save()
-                return tile
-        return None
+        with self._lock:
+            page = self._find_page(page_id)
+            if not page:
+                return None
+            tile = {"id": str(uuid.uuid4())}
+            tile.update(_clean_tile(tile_data))
+            page.setdefault("tiles", []).append(tile)
+            self.save()
+            return copy.deepcopy(tile)
 
     def update_tile(self, tile_id, tile_data):
-        for page in self.pages:
-            for i, tile in enumerate(page.get("tiles", [])):
-                if tile["id"] == tile_id:
-                    page["tiles"][i].update(tile_data)
-                    self.save()
-                    return page["tiles"][i]
-        return None
+        with self._lock:
+            for page in self.pages:
+                for i, tile in enumerate(page.get("tiles", [])):
+                    if tile["id"] == tile_id:
+                        page["tiles"][i] = _clean_tile(tile_data, existing=tile)
+                        self.save()
+                        return copy.deepcopy(page["tiles"][i])
+            return None
+
+    def duplicate_tile(self, tile_id):
+        with self._lock:
+            for page in self.pages:
+                tiles = page.get("tiles", [])
+                for i, tile in enumerate(tiles):
+                    if tile["id"] == tile_id:
+                        clone = copy.deepcopy(tile)
+                        clone["id"] = str(uuid.uuid4())
+                        clone["label"] = (tile.get("label", "") + " copy")[:MAX_LABEL_LEN]
+                        tiles.insert(i + 1, clone)
+                        self.save()
+                        return copy.deepcopy(clone)
+            return None
+
+    def move_tile(self, tile_id, target_page_id, index=None):
+        """Move a tile to another page (or position). Returns the tile or None."""
+        with self._lock:
+            target = self._find_page(target_page_id)
+            if not target:
+                return None
+            for page in self.pages:
+                tiles = page.get("tiles", [])
+                for i, tile in enumerate(tiles):
+                    if tile["id"] == tile_id:
+                        tiles.pop(i)
+                        dest = target.setdefault("tiles", [])
+                        if index is None or not isinstance(index, int) or index > len(dest):
+                            index = len(dest)
+                        dest.insert(max(0, index), tile)
+                        self.save()
+                        return copy.deepcopy(tile)
+            return None
+
+    def reorder_tiles(self, page_id, order):
+        with self._lock:
+            page = self._find_page(page_id)
+            if not page:
+                return False
+            by_id = {t["id"]: t for t in page.get("tiles", [])}
+            ordered = [by_id.pop(tid) for tid in order if tid in by_id]
+            page["tiles"] = ordered + [t for t in page.get("tiles", []) if t["id"] in by_id]
+            self.save()
+            return True
 
     def delete_tile(self, page_id, tile_id):
-        for page in self.pages:
-            if page["id"] == page_id:
-                page["tiles"] = [t for t in page.get("tiles", []) if t["id"] != tile_id]
-                self.save()
-                return True
-        return False
-
-
-config_manager = ConfigManager()
+        with self._lock:
+            page = self._find_page(page_id)
+            if not page:
+                return False
+            before = len(page.get("tiles", []))
+            page["tiles"] = [t for t in page.get("tiles", []) if t["id"] != tile_id]
+            if len(page["tiles"]) == before:
+                return False
+            self.save()
+            return True
 
 
 def hex_to_color_int(hex_str):
@@ -235,11 +389,7 @@ def hex_to_color_int(hex_str):
     return (0xFF << 24) | (r << 16) | (g << 8) | b
 
 
-def color_int_to_hex(color_int):
-    r = (color_int >> 16) & 0xFF
-    g = (color_int >> 8) & 0xFF
-    b = color_int & 0xFF
-    return f"#{r:02x}{g:02x}{b:02x}"
+config_manager = ConfigManager()
 
 
 def scan_installed_apps():
@@ -250,57 +400,90 @@ def scan_installed_apps():
             return _scan_macos_apps()
         elif SYSTEM == "Windows":
             return _scan_windows_apps()
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning(f"App scan failed: {e}")
     return []
+
+
+def _parse_desktop_entry(content):
+    """Return the key/values of the [Desktop Entry] group only (later groups are Desktop Actions)."""
+    entry = {}
+    in_entry = False
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            in_entry = line == "[Desktop Entry]"
+            continue
+        if in_entry and "=" in line:
+            key, value = line.split("=", 1)
+            entry.setdefault(key.strip(), value.strip())
+    return entry
+
+
+def _desktop_exec_to_command(exec_line):
+    """Turn a desktop Exec= line into a command PhoneDeck can launch (field codes like %U removed)."""
+    try:
+        parts = shlex.split(exec_line)
+    except ValueError:
+        return None
+    # Drop field codes (%U, %f…) and Flatpak's file-forwarding markers, which only matter when opening files.
+    parts = [p for p in parts
+             if not (len(p) == 2 and p.startswith("%")) and p not in ("@@", "@@u", "--file-forwarding")]
+    if not parts:
+        return None
+    # Prefer the bare program name when the absolute path is what PATH resolves to anyway.
+    base = os.path.basename(parts[0])
+    if parts[0].startswith("/") and shutil.which(base) == parts[0]:
+        parts[0] = base
+    return shlex.join(parts)
 
 
 def _scan_linux_apps():
     seen = set()
     apps = []
-    dirs = [
-        "/usr/share/applications",
-        "/usr/local/share/applications",
-        os.path.expanduser("~/.local/share/applications"),
+    data_dirs = os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    dirs = [os.path.expanduser("~/.local/share/applications")]
+    dirs += [os.path.join(d, "applications") for d in data_dirs if d]
+    dirs += [
         "/var/lib/snapd/desktop/applications",
         "/var/lib/flatpak/exports/share/applications",
+        os.path.expanduser("~/.local/share/flatpak/exports/share/applications"),
     ]
-    for d in dirs:
+    for d in dict.fromkeys(dirs):
         if not os.path.isdir(d):
             continue
         try:
-            for f in sorted(os.listdir(d)):
-                if not f.endswith(".desktop"):
-                    continue
-                path = os.path.join(d, f)
-                try:
-                    with open(path, "r", errors="ignore") as fh:
-                        content = fh.read()
-                except Exception:
-                    continue
-                name = None
-                exec_cmd = None
-                skip = False
-                for line in content.split("\n"):
-                    if line.startswith("Name=") and name is None:
-                        name = line.split("=", 1)[1].strip()
-                    elif line.startswith("Exec="):
-                        exec_cmd = line.split("=", 1)[1].strip()
-                    elif line.startswith("NoDisplay=true"):
-                        skip = True
-                if name and exec_cmd and not skip and name not in seen:
-                    seen.add(name)
-                    exec_cmd = exec_cmd.split("%")[0].split(" ")[0].strip()
-                    exec_cmd = exec_cmd.strip('"').strip("'")
-                    if exec_cmd and not exec_cmd.startswith("/"):
-                        apps.append({"name": name, "command": exec_cmd})
-        except Exception:
+            files = sorted(os.listdir(d))
+        except OSError:
             continue
+        for f in files:
+            if not f.endswith(".desktop"):
+                continue
+            try:
+                with open(os.path.join(d, f), "r", errors="ignore") as fh:
+                    entry = _parse_desktop_entry(fh.read())
+            except OSError:
+                continue
+            name = entry.get("Name")
+            if not name or name in seen:
+                continue
+            if entry.get("Type", "Application") != "Application":
+                continue
+            if entry.get("NoDisplay") == "true" or entry.get("Hidden") == "true":
+                continue
+            cmd = _desktop_exec_to_command(entry.get("Exec", ""))
+            if not cmd:
+                continue
+            seen.add(name)
+            apps.append({"name": name, "command": cmd})
     return sorted(apps, key=lambda x: x["name"].lower())
 
 
 def _scan_macos_apps():
     apps = []
+    seen = set()
     dirs = [
         "/Applications",
         "/Applications/Utilities",
@@ -315,14 +498,15 @@ def _scan_macos_apps():
             for f in sorted(os.listdir(d)):
                 if not f.endswith(".app"):
                     continue
-                name = f.replace(".app", "")
-                bundle_path = os.path.join(d, f)
-                plist_path = os.path.join(bundle_path, "Contents", "Info.plist")
-                cmd = f"open -a '{name}'"
-                apps.append({"name": name, "command": cmd})
-        except Exception:
+                name = f[:-len(".app")]
+                if name in seen:
+                    continue
+                seen.add(name)
+                # _macos_command runs `open -a <command>`, so the command is just the app name.
+                apps.append({"name": name, "command": name})
+        except OSError:
             continue
-    return apps
+    return sorted(apps, key=lambda x: x["name"].lower())
 
 
 def _scan_windows_apps():
@@ -335,12 +519,15 @@ def _scan_windows_apps():
         if not os.path.isdir(d):
             continue
         try:
-            for root, dirs_list, files in os.walk(d):
+            for root, _dirs, files in os.walk(d):
                 for f in files:
-                    if f.endswith(".lnk"):
+                    if f.lower().endswith(".lnk"):
                         name = os.path.splitext(f)[0]
-                        apps.append({"name": name, "command": f"start {name}"})
-        except Exception:
+                        if "uninstall" in name.lower():
+                            continue
+                        # _windows_command opens existing paths with os.startfile.
+                        apps.append({"name": name, "command": os.path.join(root, f)})
+        except OSError:
             continue
     seen = set()
     unique = []
@@ -351,136 +538,262 @@ def _scan_windows_apps():
     return sorted(unique, key=lambda x: x["name"].lower())
 
 
+_apps_cache = {"time": 0.0, "apps": []}
+_apps_lock = threading.Lock()
+
+
+def cached_installed_apps(max_age=60):
+    with _apps_lock:
+        if time.time() - _apps_cache["time"] > max_age or not _apps_cache["apps"]:
+            _apps_cache["apps"] = scan_installed_apps()
+            _apps_cache["time"] = time.time()
+        return _apps_cache["apps"]
+
+
+def _is_local_host_name(host):
+    """True if `host` (from a Host/Origin header, no port) names this machine rather than an arbitrary domain.
+
+    Rejecting other names blocks DNS-rebinding attacks from websites against the config API.
+    """
+    host = host.strip("[]").lower()
+    if host in ("localhost", "") or host.endswith(".localhost"):
+        return True
+    try:
+        socket.inet_pton(socket.AF_INET6 if ":" in host else socket.AF_INET, host)
+        return True
+    except OSError:
+        pass
+    hostname = socket.gethostname().lower()
+    return host in (hostname, hostname + ".local", hostname.split(".")[0] + ".local")
+
+
 class ConfigHTTPHandler(http.server.BaseHTTPRequestHandler):
     config_manager = None
-    loop = None
+    main_loop = None
+    server_version = "PhoneDeck/" + VERSION
+
+    CSP = ("default-src 'self'; script-src 'self'; "
+           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+           "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; "
+           "frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 
     def log_message(self, format, *args):
-        log.info(f"[HTTP] {args[0]} {args[1]} {args[2]}")
+        log.debug(f"[HTTP] {format % args}")
+
+    def _security_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
 
     def _send_json(self, data, status=200):
+        body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self._security_headers()
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        self.wfile.write(body)
 
-    def _send_file(self, path, mime):
+    def _send_file(self, name, mime):
         try:
-            with open(path, "rb") as f:
+            with open(os.path.join(WEB_UI_DIR, name), "rb") as f:
                 content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", mime)
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(content)
-        except Exception:
-            self._send_json({"error": "Not found"}, 404)
+        except OSError:
+            self._send_json({"error": f"Web UI file missing: {name}"}, 404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Security-Policy", self.CSP)
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _host_ok(self):
+        host = self.headers.get("Host", "")
+        return _is_local_host_name(urllib.parse.urlsplit("//" + host).hostname or "")
+
+    def _write_allowed(self):
+        """Block cross-site requests: any Origin must match our Host, and bodies must be JSON
+        (which forces a CORS preflight that this server never approves)."""
+        origin = self.headers.get("Origin")
+        if origin and urllib.parse.urlsplit(origin).netloc != self.headers.get("Host", ""):
+            return False
+        if self.command in ("POST", "PUT"):
+            ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if ctype != "application/json":
+                return False
+        return True
+
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length > 2 * 1024 * 1024:
+            raise ValueError("Request body too large")
+        body = self.rfile.read(length).decode() if length else "{}"
+        data = json.loads(body or "{}")
+        if not isinstance(data, dict):
+            raise ValueError("Expected a JSON object")
+        return data
+
+    def _dispatch(self, method):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        if not self._host_ok():
+            self._send_json({"error": "Forbidden host"}, 403)
+            return
+        if method != "GET" and not self._write_allowed():
+            self._send_json({"error": "Cross-origin request blocked"}, 403)
+            return
+        data = {}
+        if method in ("POST", "PUT"):
+            try:
+                data = self._read_json()
+            except (ValueError, json.JSONDecodeError) as e:
+                self._send_json({"error": f"Invalid JSON: {e}"}, 400)
+                return
+        parts = [p for p in path.split("/") if p]
+        try:
+            getattr(self, f"_handle_{method.lower()}")(path, parts, data)
+        except Exception as e:
+            log.exception("HTTP handler error")
+            self._send_json({"error": str(e)}, 500)
 
     def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
+        self._dispatch("GET")
 
-        if path == "/" or path == "":
-            self._send_file(os.path.join(WEB_UI_DIR, "index.html"), "text/html")
-        elif path == "/style.css":
-            self._send_file(os.path.join(WEB_UI_DIR, "style.css"), "text/css")
-        elif path == "/script.js":
-            self._send_file(os.path.join(WEB_UI_DIR, "script.js"), "application/javascript")
+    def do_POST(self):
+        self._dispatch("POST")
+
+    def do_PUT(self):
+        self._dispatch("PUT")
+
+    def do_DELETE(self):
+        self._dispatch("DELETE")
+
+    def _status(self):
+        cm = self.config_manager
+        return {
+            "connected": len(CONNECTED_CLIENTS),
+            "version": VERSION,
+            "revision": cm.revision,
+            "dirty": cm.dirty,
+        }
+
+    def _handle_get(self, path, parts, data):
+        cm = self.config_manager
+        if path in WEB_UI_FILES:
+            self._send_file(*WEB_UI_FILES[path])
         elif path == "/api/pages":
-            self._send_json({"pages": self.config_manager.get_pages()})
+            pages, revision = cm.snapshot()
+            self._send_json({"pages": pages, "revision": revision})
         elif path == "/api/apps":
-            apps = scan_installed_apps()
-            self._send_json({"apps": apps})
+            self._send_json({"apps": cached_installed_apps()})
         elif path == "/api/status":
-            self._send_json({"connected": len(CONNECTED_CLIENTS), "version": VERSION})
+            self._send_json(self._status())
+        elif path == "/api/meta":
+            self._send_json({
+                "version": VERSION,
+                "platform": SYSTEM,
+                "hostname": socket.gethostname(),
+                "protectedPages": sorted(PROTECTED_PAGES),
+                "commands": [{"command": k, "label": v} for k, v in COMMAND_MAP.items()],
+            })
         else:
             self._send_json({"error": "Not found"}, 404)
 
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode() if length else "{}"
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            self._send_json({"error": "Invalid JSON"}, 400)
-            return
-
+    def _handle_post(self, path, parts, data):
+        cm = self.config_manager
         if path == "/api/pages":
-            name = data.get("name", "").strip()
+            name = str(data.get("name", "")).strip()
             if not name:
-                self._send_json({"error": "Name is required"}, 400)
-                return
-            page = self.config_manager.add_page(name)
-            self._send_json({"page": page}, 201)
+                return self._send_json({"error": "Name is required"}, 400)
+            self._send_json({"page": cm.add_page(name)}, 201)
+
+        elif path == "/api/pages/reorder":
+            order = data.get("order")
+            if not isinstance(order, list):
+                return self._send_json({"error": "order must be a list of page ids"}, 400)
+            cm.reorder_pages([str(x) for x in order])
+            self._send_json({"status": "ok"})
 
         elif path == "/api/tiles":
             page_id = data.get("pageId", "")
             if not page_id:
-                self._send_json({"error": "pageId is required"}, 400)
-                return
-            tile_data = {
-                "label": data.get("label", ""),
-                "command": data.get("command", ""),
-                "icon": data.get("icon", "apps"),
-                "color": data.get("color", 0xFF1E1E2E),
-                "iconColor": data.get("iconColor", 0xFF4A90D9),
-            }
-            if isinstance(tile_data["color"], str):
-                tile_data["color"] = hex_to_color_int(tile_data["color"])
-            if isinstance(tile_data["iconColor"], str):
-                tile_data["iconColor"] = hex_to_color_int(tile_data["iconColor"])
-            tile = self.config_manager.add_tile(page_id, tile_data)
+                return self._send_json({"error": "pageId is required"}, 400)
+            if not str(data.get("label", "")).strip():
+                return self._send_json({"error": "Label is required"}, 400)
+            tile = cm.add_tile(page_id, data)
             if tile:
                 self._send_json({"tile": tile}, 201)
             else:
                 self._send_json({"error": "Page not found"}, 404)
 
+        elif path == "/api/tiles/reorder":
+            order = data.get("order")
+            if not isinstance(order, list):
+                return self._send_json({"error": "order must be a list of tile ids"}, 400)
+            if cm.reorder_tiles(data.get("pageId", ""), [str(x) for x in order]):
+                self._send_json({"status": "ok"})
+            else:
+                self._send_json({"error": "Page not found"}, 404)
+
+        elif len(parts) == 4 and parts[:2] == ["api", "tiles"] and parts[3] == "duplicate":
+            tile = cm.duplicate_tile(parts[2])
+            if tile:
+                self._send_json({"tile": tile}, 201)
+            else:
+                self._send_json({"error": "Tile not found"}, 404)
+
+        elif len(parts) == 4 and parts[:2] == ["api", "tiles"] and parts[3] == "move":
+            tile = cm.move_tile(parts[2], data.get("pageId", ""), data.get("index"))
+            if tile:
+                self._send_json({"tile": tile})
+            else:
+                self._send_json({"error": "Tile or page not found"}, 404)
+
+        elif path == "/api/test":
+            command = str(data.get("command", "")).strip()
+            if not command:
+                return self._send_json({"error": "Command is required"}, 400)
+            result = execute_command(command)
+            self._send_json(result, 200 if result.get("status") == "ok" else 400)
+
+        elif path == "/api/import":
+            count = cm.import_pages(data.get("pages"))
+            if count is None:
+                return self._send_json({"error": "Invalid config: expected {\"pages\": [{\"name\", \"tiles\"}]}"}, 400)
+            self._send_json({"status": "ok", "pages": count})
+
+        elif path == "/api/reset":
+            cm.reset_to_defaults()
+            self._send_json({"status": "ok"})
+
         elif path == "/api/sync":
-            self._send_config_sync_to_phones()
-            self._send_json({"connected": len(CONNECTED_CLIENTS), "status": "ok"})
+            connected = self._send_config_sync_to_phones()
+            self._send_json({"connected": connected, "status": "ok", **self._status()})
 
         else:
             self._send_json({"error": "Not found"}, 404)
 
-    def do_PUT(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode() if length else "{}"
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            self._send_json({"error": "Invalid JSON"}, 400)
-            return
-
-        parts = path.split("/")
-
-        if len(parts) == 4 and parts[1] == "api" and parts[2] == "pages":
-            page_id = parts[3]
-            name = data.get("name", "").strip()
+    def _handle_put(self, path, parts, data):
+        cm = self.config_manager
+        if len(parts) == 3 and parts[:2] == ["api", "pages"]:
+            name = str(data.get("name", "")).strip()
             if not name:
-                self._send_json({"error": "Name is required"}, 400)
-                return
-            page = self.config_manager.update_page(page_id, name)
+                return self._send_json({"error": "Name is required"}, 400)
+            page = cm.update_page(parts[2], name)
             if page:
                 self._send_json({"page": page})
             else:
                 self._send_json({"error": "Page not found"}, 404)
 
-        elif len(parts) == 4 and parts[1] == "api" and parts[2] == "tiles":
-            tile_id = parts[3]
-            tile_data = {}
-            for key in ("label", "command", "icon", "color", "iconColor"):
-                if key in data:
-                    tile_data[key] = data[key]
-            if "color" in tile_data and isinstance(tile_data["color"], str):
-                tile_data["color"] = hex_to_color_int(tile_data["color"])
-            if "iconColor" in tile_data and isinstance(tile_data["iconColor"], str):
-                tile_data["iconColor"] = hex_to_color_int(tile_data["iconColor"])
-            tile = self.config_manager.update_tile(tile_id, tile_data)
+        elif len(parts) == 3 and parts[:2] == ["api", "tiles"]:
+            if "label" in data and not str(data["label"]).strip():
+                return self._send_json({"error": "Label is required"}, 400)
+            fields = {k: data[k] for k in ("label", "command", "icon", "color", "iconColor") if k in data}
+            tile = cm.update_tile(parts[2], fields)
             if tile:
                 self._send_json({"tile": tile})
             else:
@@ -488,22 +801,16 @@ class ConfigHTTPHandler(http.server.BaseHTTPRequestHandler):
         else:
             self._send_json({"error": "Not found"}, 404)
 
-    def do_DELETE(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path.rstrip("/")
-        parts = path.split("/")
-
-        if len(parts) == 4 and parts[1] == "api" and parts[2] == "pages":
-            page_id = parts[3]
-            if self.config_manager.delete_page(page_id):
+    def _handle_delete(self, path, parts, data):
+        cm = self.config_manager
+        if len(parts) == 3 and parts[:2] == ["api", "pages"]:
+            if cm.delete_page(parts[2]):
                 self._send_json({"status": "deleted"})
             else:
-                self._send_json({"error": "Cannot delete built-in page"}, 400)
+                self._send_json({"error": "Built-in pages can't be deleted"}, 400)
 
-        elif len(parts) == 5 and parts[1] == "api" and parts[2] == "tiles":
-            page_id = parts[3]
-            tile_id = parts[4]
-            if self.config_manager.delete_tile(page_id, tile_id):
+        elif len(parts) == 4 and parts[:2] == ["api", "tiles"]:
+            if cm.delete_tile(parts[2], parts[3]):
                 self._send_json({"status": "deleted"})
             else:
                 self._send_json({"error": "Tile not found"}, 404)
@@ -511,22 +818,39 @@ class ConfigHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Not found"}, 404)
 
     def _send_config_sync_to_phones(self):
-        pages = self.config_manager.get_pages()
-        message = json.dumps({"type": "config_sync", "pages": pages})
-        coro = broadcast(message)
-        if hasattr(self.__class__, 'main_loop') and self.__class__.main_loop:
-            asyncio.run_coroutine_threadsafe(coro, self.__class__.main_loop)
+        connected = len(CONNECTED_CLIENTS)
+        if connected and self.main_loop:
+            asyncio.run_coroutine_threadsafe(push_config_to_phones(), self.main_loop)
+        return connected
+
+
+async def push_config_to_phones(clients=None):
+    """Send the current config to phones and mark it as synced."""
+    pages, revision = config_manager.snapshot()
+    message = json.dumps({"type": "config_sync", "pages": pages})
+    targets = clients if clients is not None else CONNECTED_CLIENTS.copy()
+    if not targets:
+        return
+    await asyncio.gather(*(c.send(message) for c in targets), return_exceptions=True)
+    with config_manager._lock:
+        if config_manager.revision == revision:
+            config_manager.mark_synced()
 
 
 def start_http_server(cm, main_loop):
     ConfigHTTPHandler.config_manager = cm
     ConfigHTTPHandler.main_loop = main_loop
-    server = http.server.HTTPServer(("0.0.0.0", CONFIG_PORT), ConfigHTTPHandler)
+    try:
+        server = http.server.ThreadingHTTPServer(("0.0.0.0", CONFIG_PORT), ConfigHTTPHandler)
+    except OSError as e:
+        log.error(f"Config web UI could not start on port {CONFIG_PORT}: {e}")
+        return
+    server.daemon_threads = True
     log.info(f"Config web UI started at http://localhost:{CONFIG_PORT}")
     try:
         server.serve_forever()
     except Exception:
-        pass
+        log.exception("Config web UI stopped")
 
 
 def _run_async(cmd: list, shell: bool = False) -> dict:
@@ -712,7 +1036,16 @@ def _linux_command(command: str) -> dict:
     app = app_map.get(command, command)
     if app is None:
         return {"status": "error", "message": f"No mapping for: {command}"}
-    return _run_async([app])
+    # Commands may carry arguments (e.g. "flatpak run org.app.Name"); split without a shell.
+    try:
+        argv = shlex.split(app)
+    except ValueError as e:
+        return {"status": "error", "message": f"Invalid command: {e}"}
+    if not argv:
+        return {"status": "error", "message": "Empty command"}
+    if not shutil.which(argv[0]):
+        return {"status": "error", "message": f"Program not found: {argv[0]}"}
+    return _run_async(argv)
 
 
 def _find_terminal() -> str:
@@ -842,8 +1175,13 @@ def _windows_command(command: str) -> dict:
     if command in ("brightness_up", "brightness_down"):
         return _windows_brightness(command)
 
+    if os.path.exists(command):
+        os.startfile(command)
+        return {"status": "ok", "command": command}
+
     app = app_map.get(command, command)
-    subprocess.Popen(["start", app], shell=True)
+    # `start "" <app>` resolves App Paths entries; quote via list2cmdline to avoid shell injection.
+    subprocess.Popen("start \"\" " + subprocess.list2cmdline([app]), shell=True)
     return {"status": "ok", "command": command}
 
 
@@ -893,8 +1231,15 @@ async def handler(websocket):
                 msg_type = payload.get("type", "")
                 if msg_type == "config_init":
                     pages = payload.get("pages", [])
+                    if config_manager.dirty:
+                        # Edits made in the web UI haven't reached the phone yet; push them
+                        # instead of overwriting them with the phone's older copy.
+                        log.info("Phone connected with stale config, sending desktop edits")
+                        await websocket.send(json.dumps({"type": "config_init_ack", "status": "ok"}))
+                        await push_config_to_phones({websocket})
+                        continue
                     if pages:
-                        config_manager.set_pages(pages)
+                        config_manager.set_pages(pages, from_phone=True)
                         log.info(f"Config received from phone ({len(pages)} pages)")
                     await websocket.send(json.dumps({"type": "config_init_ack", "status": "ok"}))
                     continue
@@ -921,7 +1266,6 @@ async def handler(websocket):
 
 def get_best_local_ip() -> str:
     try:
-        best_ip = None
         for adapter in ifaddr.get_adapters():
             name = adapter.name.lower()
             if name == 'lo' or name.startswith('docker') or name.startswith('br-') or name.startswith('veth') or 'warp' in name or name.startswith('tun') or name.startswith('wg'):
@@ -979,7 +1323,7 @@ async def main():
     print("  ╔══════════════════════════════════════╗")
     print("  ║      \033[1;36mPhoneDeck Desktop Server\033[0m        ║")
     print("  ╠══════════════════════════════════════╣")
-    print(f"  ║  \033[33mConnect from PhoneDeck app to:\033[0m      ║")
+    print("  ║  \033[33mConnect from PhoneDeck app to:\033[0m      ║")
     print(f"  ║  ws://{local_ip}:{port:<26} ║")
     print("  ║                                      ║")
     print("  ║  \033[32mThe app will now auto-discover\033[0m      ║")
@@ -1050,6 +1394,8 @@ def auto_install_linux_service():
 
     os.makedirs(os.path.dirname(target_bin), exist_ok=True)
     try:
+        if os.path.exists(target_bin):
+            os.remove(target_bin)
         shutil.copyfile(current_exe, target_bin)
         os.chmod(target_bin, 0o755)
     except OSError as e:
@@ -1085,7 +1431,8 @@ WantedBy=default.target
     try:
         subprocess.run(["loginctl", "enable-linger", os.environ.get("USER", "")], capture_output=True)
         subprocess.check_call(["systemctl", "--user", "daemon-reload"])
-        subprocess.check_call(["systemctl", "--user", "enable", "--now", "phonedeck.service"])
+        subprocess.check_call(["systemctl", "--user", "enable", "phonedeck.service"])
+        subprocess.check_call(["systemctl", "--user", "restart", "phonedeck.service"])
         print("\n✅ Successfully installed and started in the background!")
         print("✅ Auto-start on login enabled.")
         print("You can safely close this terminal. It will always start automatically.")

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -95,7 +96,6 @@ private fun TileButton(
 
 @Composable
 fun PageIndicator(
-    pageCount: Int,
     currentPage: Int,
     pages: List<Page>,
     onPageSelected: (Int) -> Unit,
@@ -163,9 +163,9 @@ private fun getIconForTile(icon: String) = when (icon) {
     "image" -> Icons.Default.Image
     "brush" -> Icons.Default.Brush
     "visibility" -> Icons.Default.Visibility
-    "volume_up" -> Icons.Default.VolumeUp
-    "volume_down" -> Icons.Default.VolumeDown
-    "volume_off" -> Icons.Default.VolumeOff
+    "volume_up" -> Icons.AutoMirrored.Filled.VolumeUp
+    "volume_down" -> Icons.AutoMirrored.Filled.VolumeDown
+    "volume_off" -> Icons.AutoMirrored.Filled.VolumeOff
     "play_arrow" -> Icons.Default.PlayArrow
     "skip_next" -> Icons.Default.SkipNext
     "skip_previous" -> Icons.Default.SkipPrevious
@@ -181,17 +181,52 @@ private fun getIconForTile(icon: String) = when (icon) {
     "brightness_down" -> Icons.Default.BrightnessLow
     "restart" -> Icons.Default.RestartAlt
     "shutdown" -> Icons.Default.PowerSettingsNew
-    "logout" -> Icons.Default.ExitToApp
+    "logout" -> Icons.AutoMirrored.Filled.ExitToApp
     "hibernate" -> Icons.Default.Bedtime
     "smart_display" -> Icons.Default.SmartDisplay
     "search" -> Icons.Default.Search
     "forum" -> Icons.Default.Forum
-    "chat" -> Icons.Default.Chat
-    "help" -> Icons.Default.Help
-    "menu_book" -> Icons.Default.MenuBook
+    "chat" -> Icons.AutoMirrored.Filled.Chat
+    "help" -> Icons.AutoMirrored.Filled.Help
+    "menu_book" -> Icons.AutoMirrored.Filled.MenuBook
     "cloud" -> Icons.Default.Cloud
     "api" -> Icons.Default.Api
     "videocam" -> Icons.Default.Videocam
-    "article" -> Icons.Default.Article
+    "article" -> Icons.AutoMirrored.Filled.Article
+    "folder" -> Icons.Default.Folder
+    "mail" -> Icons.Default.Mail
+    "calendar_month" -> Icons.Default.CalendarMonth
+    "settings" -> Icons.Default.Settings
+    "home" -> Icons.Default.Home
+    "desktop_windows" -> Icons.Default.DesktopWindows
+    "sports_esports" -> Icons.Default.SportsEsports
+    "photo_camera" -> Icons.Default.PhotoCamera
+    "mic" -> Icons.Default.Mic
+    "mic_off" -> Icons.Default.MicOff
+    "headphones" -> Icons.Default.Headphones
+    "keyboard" -> Icons.Default.Keyboard
+    "wifi" -> Icons.Default.Wifi
+    "bluetooth" -> Icons.Default.Bluetooth
+    "dark_mode" -> Icons.Default.DarkMode
+    "light_mode" -> Icons.Default.LightMode
+    "stop" -> Icons.Default.Stop
+    "fast_forward" -> Icons.Default.FastForward
+    "fast_rewind" -> Icons.Default.FastRewind
+    "shuffle" -> Icons.Default.Shuffle
+    "repeat" -> Icons.Default.Repeat
+    "download" -> Icons.Default.Download
+    "upload" -> Icons.Default.Upload
+    "refresh" -> Icons.Default.Refresh
+    "content_copy" -> Icons.Default.ContentCopy
+    "content_paste" -> Icons.Default.ContentPaste
+    "edit_note" -> Icons.Default.EditNote
+    "calculate" -> Icons.Default.Calculate
+    "timer" -> Icons.Default.Timer
+    "notifications" -> Icons.Default.Notifications
+    "shopping_cart" -> Icons.Default.ShoppingCart
+    "star" -> Icons.Default.Star
+    "favorite" -> Icons.Default.Favorite
+    "bolt" -> Icons.Default.Bolt
+    "rocket_launch" -> Icons.Default.RocketLaunch
     else -> Icons.Default.Apps
 }

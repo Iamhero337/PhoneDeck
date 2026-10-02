@@ -27,6 +27,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var discoveryJob: Job? = null
     private var connectionJob: Job? = null
     private var reconnectAttempts = 0
+    @Suppress("DEPRECATION")
     private val vibrator = application.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
     private val _pages = MutableStateFlow<List<Page>>(emptyList())
@@ -91,6 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun startDiscovery() {
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
@@ -162,7 +164,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         is PhoneDeckClient.ConnectionState.Error -> {
                             _connectionStatus.value = "Error: ${state.message}"
                             _connected.value = false
-                            throw RuntimeException(state.message ?: "Error")
+                            throw RuntimeException(state.message)
                         }
                     }
                 }

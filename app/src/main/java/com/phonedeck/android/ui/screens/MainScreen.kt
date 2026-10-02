@@ -100,7 +100,6 @@ fun MainScreen(viewModel: MainViewModel) {
                 val currentPage = pages[currentPageIndex]
 
                 PageIndicator(
-                    pageCount = pages.size,
                     currentPage = currentPageIndex,
                     pages = pages,
                     onPageSelected = { viewModel.selectPage(it) }

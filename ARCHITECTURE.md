@@ -174,25 +174,36 @@ Error response:
 ### Config Sync Flow
 1. Phone connects to server and sends `config_init` with its current pages (only if not already synced)
 2. Server stores the config and serves it to the web UI via HTTP REST API
-3. User modifies pages/tiles in the web UI at http://localhost:9091
+3. User modifies pages/tiles in the web UI at http://localhost:9091 (the Sync button shows a dot while edits are unsynced)
 4. User clicks "Sync to Phone" → server sends `config_sync` to all connected phones
 5. Phone receives `config_sync` and updates its local SharedPreferences immediately
+6. If a phone connects while desktop edits are still unsynced (tracked as `pendingSync` in `config.json`, so it survives restarts), the server ignores the phone's `config_init` and pushes its own config instead
 
 ### HTTP REST API (Config Web UI)
 The Config HTTP server runs on port 9091 alongside the WebSocket server:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/pages` | Get all pages with tiles |
-| GET | `/api/apps` | Scan installed applications |
-| GET | `/api/status` | Server health + connected clients |
+| GET | `/api/pages` | Get all pages with tiles (+ `revision`) |
+| GET | `/api/apps` | Scan installed applications (cached 60s) |
+| GET | `/api/status` | Connected phones, version, `revision`, `dirty` (unsynced edits) |
+| GET | `/api/meta` | Built-in commands, protected page ids, hostname, platform |
 | POST | `/api/pages` | Create a new page |
 | PUT | `/api/pages/:id` | Rename a page |
 | DELETE | `/api/pages/:id` | Delete a page (built-in pages protected) |
+| POST | `/api/pages/reorder` | Reorder pages: `{"order": [pageId, ...]}` |
 | POST | `/api/tiles` | Add a tile to a page |
 | PUT | `/api/tiles/:id` | Update a tile |
 | DELETE | `/api/tiles/:pageId/:tileId` | Delete a tile |
+| POST | `/api/tiles/reorder` | Reorder tiles: `{"pageId", "order": [tileId, ...]}` |
+| POST | `/api/tiles/:id/duplicate` | Duplicate a tile next to the original |
+| POST | `/api/tiles/:id/move` | Move a tile to another page: `{"pageId", "index"?}` |
+| POST | `/api/test` | Run a command on the desktop: `{"command"}` |
+| POST | `/api/import` | Replace all pages: `{"pages": [...]}` (validated) |
+| POST | `/api/reset` | Restore the default pages |
 | POST | `/api/sync` | Push config to all connected phones |
+
+Write requests must send `Content-Type: application/json` and, if the browser sends an `Origin`, it must match the `Host`. Requests whose `Host` isn't localhost, an IP address, or this machine's hostname are rejected. Together these stop other websites from editing your tiles (CSRF / DNS rebinding).
 
 ### mDNS Service
 - **Service Type:** `_phonedeck._tcp.local.`

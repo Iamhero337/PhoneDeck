@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +37,6 @@ fun SettingsScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit
 ) {
-    val pages by viewModel.pages.collectAsState()
     val connected by viewModel.connected.collectAsState()
     val discoveredServerIp by viewModel.discoveredServerIp.collectAsState()
     val connectionStatus by viewModel.connectionStatus.collectAsState()
@@ -81,7 +81,7 @@ fun SettingsScreen(
         ) {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color.White) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F0F1A), titleContentColor = Color.White)
             )
 
@@ -101,7 +101,7 @@ fun SettingsScreen(
                         subtitle = "Automatically connect to discovered server",
                         trailing = { Switch(checked = autoConnect.value, onCheckedChange = { autoConnect.value = it; ConfigRepository.setAutoConnect(it) }) }
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
                     SettingsRow(
                         title = "Server Port",
                         subtitle = "Port the desktop server listens on (default 9090)",
@@ -123,7 +123,7 @@ fun SettingsScreen(
                             )
                         }
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
 
                     Text("Manual Connect", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp))
                     Spacer(modifier = Modifier.height(2.dp))
@@ -210,7 +210,7 @@ fun SettingsScreen(
                         subtitle = "Vibrate when tapping tiles",
                         trailing = { Switch(checked = hapticFeedback.value, onCheckedChange = { hapticFeedback.value = it; ConfigRepository.setHapticFeedback(it) }) }
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
                     SettingsRow(
                         title = "Dark Mode",
                         subtitle = "Use dark theme (always on for now)",
@@ -239,7 +239,7 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
                     SettingsRow(
                         title = "Reset to Defaults",
                         subtitle = "Remove all custom pages and top sites",
@@ -275,7 +275,7 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
                     SettingsRow(
                         title = "Import Configuration",
                         subtitle = "Load pages and tiles from a JSON file",
@@ -304,7 +304,7 @@ fun SettingsScreen(
                         subtitle = "Version 1.4.0 • Built with ❤️ by @iamhero337",
                         trailing = {}
                     )
-                    Divider(color = Color(0xFF3A3A4E))
+                    HorizontalDivider(color = Color(0xFF3A3A4E))
                     SettingsRow(
                         title = "Open Source",
                         subtitle = "MIT License - View on GitHub",
